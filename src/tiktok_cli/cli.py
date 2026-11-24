@@ -2,22 +2,18 @@
 
 Command modules are imported eagerly but MUST keep heavy deps
 (yt_dlp, faster_whisper, mlx_whisper) lazy — imported inside functions —
-so `tiktok --help` stays fast (<100ms).
+so `tiktok --help` stays fast.
+
+Discovery commands (info/search/list/tag/trending/discover) are SUSPENDED:
+the underlying `tt` binary relies on TikTok endpoints that are aggressively
+WAF-blocked for most IPs, so the commands were unreliable in practice. The
+modules remain in ``commands/`` + ``core/discovery.py`` with full test
+coverage — re-enable by restoring the imports and registrations below.
 """
 
 import typer
 
-from tiktok_cli.commands import (
-    batch,
-    discover,
-    doctor,
-    info,
-    list_cmd,
-    search,
-    tag,
-    transcript,
-    trending,
-)
+from tiktok_cli.commands import batch, doctor, transcript
 
 app = typer.Typer(
     name="tiktok",
@@ -34,10 +30,4 @@ def main() -> None:
 
 app.command(name="transcript")(transcript.transcript)
 app.command(name="batch")(batch.batch)
-app.command(name="info")(info.info)
-app.command(name="search")(search.search)
-app.command(name="list")(list_cmd.list_videos)
-app.command(name="tag")(tag.tag)
-app.command(name="trending")(trending.trending)
-app.command(name="discover")(discover.discover)
 app.command(name="doctor")(doctor.doctor)

@@ -34,16 +34,12 @@ This gives you the `tiktok` command. Verify with `tiktok doctor`.
 
   Without it, Whisper falls back to faster-whisper automatically.
 
-- **Discovery commands** (`info`, `search`, `list`, `tag`, `trending`,
-  `discover`): these shell out to the optional `tt` binary from
-  [tamnd/tiktok-cli](https://github.com/tamnd/tiktok-cli):
-
-  ```bash
-  go install github.com/tamnd/tiktok-cli/cmd/tt@latest
-  ```
-
-  `transcript` and `batch` work without `tt`. Without it, discovery commands
-  exit with an install hint.
+- **Discovery commands are suspended.** `info`, `search`, `list`, `tag`,
+  `trending`, and `discover` were built on the optional `tt` binary
+  ([tamnd/tiktok-cli](https://github.com/tamnd/tiktok-cli)) but TikTok's WAF
+  blocks those endpoints for most IPs, making them unreliable in practice.
+  They are disabled in the CLI for now; the code and tests remain in the repo
+  and can be re-enabled if TikTok's anti-bot posture changes.
 
 ## Quickstart
 
@@ -88,13 +84,10 @@ so stdout stays pipe-safe.
 |---------|-------------|-----------|
 | `tiktok transcript <urls...>` | Transcribe one or more videos (caption-first, Whisper fallback). | `-o/--output-dir`, `--whisper`, `--engine`, `--model`, `--format`, `--keep-audio`, `--refresh`, `--cookies-from-browser`, `-v` |
 | `tiktok batch <file>` | Process a list of URLs, one per line (`#` comments allowed); per-video failures don't stop the run. | same pipeline flags as `transcript` |
-| `tiktok info <url>` | Video metadata table (or `--json`). Requires `tt`. | `--json` |
-| `tiktok search <keyword>` | Mixed video/user hits. Requires `tt`. | `-n/--limit`, `--json` |
-| `tiktok list <@handle>` | A user's public videos. Requires `tt`. | `-n/--limit` (30), `--json` |
-| `tiktok tag <#tag>` | Videos under a hashtag. Requires `tt`. | `-n/--limit` (30), `--json` |
-| `tiktok trending` | Logged-out recommend feed. Requires `tt`. | `-n/--limit` (20), `--json` |
-| `tiktok discover` | Graph walk from seeds (`--seed-video`, `--seed-tag`, `--seed-user`, `--seed-search`, `--trending`; repeatable; `--depth`, `--top`, `--max-nodes`). Requires `tt`. | `--depth` (2), `--top` (20) |
 | `tiktok doctor` | Check yt-dlp, ffmpeg, faster-whisper, mlx-whisper, cached models, `tt`, network, output dir. Exit 1 if a core dep is missing. | — |
+
+> Discovery commands (`info`, `search`, `list`, `tag`, `trending`,
+> `discover`) are currently suspended — see Limitations.
 
 `transcript` and `batch` share the same option set:
 
@@ -184,12 +177,12 @@ tiktok-transcripts/                  # --output-dir
 - **TikTok changes its internals often.** Downloading relies on yt-dlp's
   TikTok extractor; when TikTok breaks it, upgrade yt-dlp
   (`uv tool install --force ...`) and run `tiktok doctor` to check versions.
-- **Discovery is best effort.** `info`, `search`, `list`, `tag`, `trending`,
-  and `discover` depend on the external `tt` binary and TikTok's web
-  endpoints, which sit behind anti-bot/WAF protection. `tt video`-style
-  reads use the sturdier SSR plane; `search`/`discover` hit the signed API
-  plane and are more likely to be rate-limited or walled. These commands
-  degrade gracefully — `transcript`/`batch` are unaffected.
+- **Discovery commands are suspended.** `info`, `search`, `list`, `tag`,
+  `trending`, and `discover` depend on the external `tt` binary and TikTok's
+  web endpoints, which sit behind aggressive anti-bot/WAF protection — in
+  practice most IPs get challenged even on the sturdier read path, so the
+  commands were removed from the CLI. `transcript`/`batch`/`doctor` are
+  unaffected.
 - **No captions + `--whisper never`** produces `no-captions`: metadata and
   an index entry, but no transcript files.
 - **Photo/slideshow posts** (`/photo/` URLs): yt-dlp cannot read `/photo/`
