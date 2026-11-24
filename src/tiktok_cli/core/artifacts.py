@@ -120,6 +120,10 @@ def compact_metadata(
     ``description`` is the post's caption. It is the only content a photo post
     has (no audio, no captions), and on a video it is often the real summary, so
     dropping it forced every caller to open ``source.info.json`` by hand.
+
+    ``language`` falls back to yt-dlp's own tag when neither the caller nor the
+    caption filename provided one, so an explicit ``-l`` and a detected tag are
+    both preferred over a bare ``null``.
     """
     return {
         "id": info.get("id"),
@@ -135,7 +139,7 @@ def compact_metadata(
         "comment_count": info.get("comment_count"),
         "transcript_source": transcript_source,
         "cue_count": cue_count,
-        "language": language,
+        "language": language or info.get("language"),
         "processed_at": _utc_now_iso(),
     }
 

@@ -389,17 +389,22 @@ def process_video(
             # read, so every caller had to go dig in source.info.json by hand.
             caption = str(info.get("description") or "").strip()
             if caption:
+                # A caption is not speech, so there is no natural cue boundary.
+                # Spanning it over the post's real duration beats a 0 s cue,
+                # which is an invalid SubRip range and collapses to zero length
+                # in every player and in anything that seeks by end time.
+                span = float(info.get("duration") or 0.0)
                 cues = [
                     Cue(
                         start=0.0,
-                        end=0.0,
+                        end=span,
                         start_time=captions.format_time(0.0),
-                        end_time=captions.format_time(0.0),
+                        end_time=captions.format_time(span),
                         text=caption,
                     )
                 ]
                 transcript_txt = _render_and_write(
-                    video_dir, cues, info, fmt, STATUS_PHOTO_POST, None
+                    video_dir, cues, info, fmt, STATUS_PHOTO_POST, language
                 )
                 return _result(
                     video_dir,
@@ -407,6 +412,8 @@ def process_video(
                     STATUS_PHOTO_POST,
                     transcript_txt=transcript_txt,
                     cue_count=1,
+                    language=language,
+                    duration=info.get("duration"),
                     transcript_source=STATUS_PHOTO_POST,
                 )
             _write_stub_metadata(video_dir, info)
