@@ -49,7 +49,7 @@ def format_time(seconds: float) -> str:
     """`00:01:02.345` — always HH:MM:SS.mmm."""
     seconds = max(0.0, seconds)
     whole = int(seconds)
-    millis = int(round((seconds - whole) * 1000))
+    millis = round((seconds - whole) * 1000)
     if millis == 1000:
         whole += 1
         millis = 0
@@ -127,7 +127,7 @@ def parse_vtt(path: str | Path) -> list[Cue]:
         if line == "WEBVTT" or line.startswith(("Kind:", "Language:")):
             index += 1
             continue
-        if line.startswith("NOTE") or line.startswith("STYLE"):
+        if line.startswith(("NOTE", "STYLE")):
             index = _skip_block(lines, index)
             continue
         # Cue identifier on its own line: the timing line follows.
@@ -212,7 +212,7 @@ def pick_caption_file(
                 break
         return (auto, lang_score, path.name)
 
-    return sorted(paths, key=rank)[0]
+    return min(paths, key=rank)
 
 
 def cues_to_paragraphs(cues: list[Cue], gap_threshold: float = DEFAULT_GAP_THRESHOLD) -> list[str]:

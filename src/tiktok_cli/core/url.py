@@ -59,7 +59,7 @@ def classify_url(url: str) -> UrlKind:
         return "other"
 
     # Short links resolve to a video, but only after a redirect.
-    if host.startswith("vm.") or host.startswith("vt.") or _SHORT_PATH.match(parsed.path):
+    if host.startswith(("vm.", "vt.")) or _SHORT_PATH.match(parsed.path):
         return "short"
 
     path = parsed.path.rstrip("/") or "/"
