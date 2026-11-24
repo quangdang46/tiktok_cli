@@ -173,9 +173,7 @@ def _render_and_write(
     source_url: str | None = None,
 ) -> Path | None:
     """Render transcripts + metadata.json; return the transcript.txt path."""
-    meta = compact_metadata(
-        info, transcript_source, len(cues), language, source_url=source_url
-    )
+    meta = compact_metadata(info, transcript_source, len(cues), language, source_url=source_url)
     rendered = captions.render_all(cues, meta, fmt)
     if isinstance(rendered, str):
         rendered = {fmt: rendered}

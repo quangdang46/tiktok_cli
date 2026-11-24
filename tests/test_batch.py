@@ -99,9 +99,7 @@ class TestBatchCommand:
         ok=0 and exited 1 even though the photo post wrote a transcript.
         """
         statuses = iter(["photo-post", "failed"])
-        _install_fake_pipeline(
-            monkeypatch, lambda u, o, **k: _result(u, status=next(statuses))
-        )
+        _install_fake_pipeline(monkeypatch, lambda u, o, **k: _result(u, status=next(statuses)))
         urls = _write_urls(tmp_path, "https://a\nhttps://b\n")
         result = runner.invoke(app, [str(urls), "-o", str(tmp_path / "out")])
 
@@ -119,9 +117,7 @@ class TestBatchCommand:
         it vanished from the output and from `ok`.
         """
         statuses = iter(["photo-post", "no-audio", "skipped-cached"])
-        _install_fake_pipeline(
-            monkeypatch, lambda u, o, **k: _result(u, status=next(statuses))
-        )
+        _install_fake_pipeline(monkeypatch, lambda u, o, **k: _result(u, status=next(statuses)))
         urls = _write_urls(tmp_path, "https://a\nhttps://b\nhttps://c\n")
         result = runner.invoke(app, [str(urls), "-o", str(tmp_path / "out")])
 

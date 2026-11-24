@@ -73,6 +73,7 @@ def count_is_consistent(counts: dict[str, int], total: int) -> bool:
     """True when every processed URL landed in exactly one known status bucket."""
     return sum(counts.values()) == total and not (set(counts) - set(ALL_STATUSES))
 
+
 _INDEX_FILENAME = "index.jsonl"
 
 
