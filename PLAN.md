@@ -1,63 +1,64 @@
-# tiktok-cli — Detailed Plan
+# tiktok-cli — Kế hoạch chi tiết
 
-> TikTok video → transcript CLI. No TikTok login, no built-in LLM, transcription runs locally.
-> An agent (Claude Code / Codex / Devin) calls this CLI, then reads the output files itself.
+> TikTok video → transcript CLI. Không login TikTok, không tích hợp LLM,
+> phiên âm chạy local.
+> Agent (Claude Code / Codex / Devin) gọi CLI này, rồi tự đọc file output.
 
 ---
 
-## 1. Goals & scope
+## 1. Mục tiêu & phạm vi
 
-### MVP (required)
+### MVP (bắt buộc)
 
-| # | Feature | Notes |
-|---|---------|-------|
-| F1 | `tiktok transcript <url>` | URL → audio/captions → `transcript.txt/.srt/.vtt/.json/.md` |
-| F2 | Caption-first | Use TikTok's existing caption track when present — skip Whisper entirely |
-| F3 | Whisper fallback | No captions → faster-whisper (cross-platform) / mlx-whisper (Apple Silicon) |
-| F4 | `tiktok transcript <url1> <url2> ...` | Multi-URL, one folder per video |
-| F5 | `tiktok batch <file>` | Read URL list from file, `#` comments, skip already-transcribed |
-| F6 | No login, no cookies by default | `--cookies-from-browser` / `--cookies` are optional flags |
+| # | Tính năng | Ghi chú |
+|---|-----------|---------|
+| F1 | `tiktok transcript <url>` | URL → audio/phụ đề → `transcript.txt/.srt/.vtt/.json/.md` |
+| F2 | Ưu tiên phụ đề | Dùng track phụ đề có sẵn của TikTok khi có — bỏ qua Whisper hoàn toàn |
+| F3 | Whisper dự phòng | Không có phụ đề → faster-whisper (đa nền tảng) / mlx-whisper (Apple Silicon) |
+| F4 | `tiktok transcript <url1> <url2> ...` | Nhiều URL, mỗi video một thư mục |
+| F5 | `tiktok batch <file>` | Đọc danh sách URL từ file, comment `#`, bỏ qua video đã có transcript |
+| F6 | Không login, không cookie mặc định | `--cookies-from-browser` / `--cookies` chỉ là flag tuỳ chọn |
 
-### Phase 2 (post-MVP, optional)
+### Phase 2 (sau MVP, tuỳ chọn)
 
-| # | Feature | Source |
-|---|---------|--------|
+| # | Tính năng | Nguồn |
+|---|-----------|--------|
 | F7 | `tiktok info <url>` | Metadata: views/likes/comments/uploader/upload_date — yt-dlp `--dump-single-json` + `--list-subs` |
-| F8 | `tiktok list <@user>` | Videos from a channel — yt-dlp flat-playlist or `tt posts` |
-| F9 | `tiktok search <keyword>` | Discovery — call `tt` binary (tamnd/tiktok-cli) or yt-dlp fallback |
-| F10 | `tiktok discover` | Graph walk — `tt discover` |
-| F11 | `tiktok tag <hashtag>` | Videos by hashtag — `tt hashtag --videos` |
+| F8 | `tiktok list <@user>` | Video từ một kênh — yt-dlp flat-playlist hoặc `tt posts` |
+| F9 | `tiktok search <keyword>` | Khám phá — gọi binary `tt` (tamnd/tiktok-cli) hoặc fallback yt-dlp |
+| F10 | `tiktok discover` | Duyệt đồ thị — `tt discover` |
+| F11 | `tiktok tag <hashtag>` | Video theo hashtag — `tt hashtag --videos` |
 | F12 | `tiktok trending` | `tt trending` |
-| F13 | `tiktok doctor` | Check yt-dlp, ffmpeg, whisper model, `tt` binary |
+| F13 | `tiktok doctor` | Kiểm tra yt-dlp, ffmpeg, model whisper, binary `tt` |
 
-### Explicitly out of scope
+### Ngoài phạm vi (explicitly out of scope)
 
-- No LLM integration inside the CLI (the agent lives outside and reads files).
-- No dashboard/web UI.
-- No database — filesystem artifacts are the source of truth.
-- No TikTok login flow or session management (optional cookie passthrough only).
-- No OCR/frames (Phase 3+, see `tiktok-extractor` reference).
+- Không tích hợp LLM trong CLI (agent nằm ngoài, tự đọc file).
+- Không dashboard/web UI.
+- Không database — artifact trên filesystem là source of truth.
+- Không flow login TikTok hay quản lý session (chỉ passthrough cookie tuỳ chọn).
+- Không OCR/frame (Phase 3+, tham khảo `tiktok-extractor`).
 
 ---
 
 ## 2. Tech stack
 
-| Layer | Choice | Why |
-|-------|--------|-----|
-| Language | **Python 3.11+** | All reference repos are Python; agent-friendly; yt-dlp/whisper are Python-first |
-| CLI framework | **Typer + Rich** | Used by `omni-transcriber`, `gerardnico/transcribe`, `tiktok-extractor`; rich progress bars |
-| Package manager | **uv** (optional PEP 723) | `uv run` zero-install pattern (jadenmaciel/transcript); `uv tool install` for global |
-| Download/subtitles | **yt-dlp** (Python API `yt_dlp.YoutubeDL`, subprocess only when needed) | Every reference repo uses it; Python API gives structured errors vs parsing CLI text |
-| Audio extract | **ffmpeg** subprocess (only if needed; faster-whisper decodes via PyAV directly) | faster-whisper's bundled PyAV handles mp4/mkv/mp3 — **ffmpeg may not be needed at all** |
-| STT engine | **faster-whisper** default; **mlx-whisper** auto-detected on Apple Silicon | douyin-teardown dual-backend pattern; faster-whisper is pip-install, no compile; mlx ~15x realtime on M-series |
-| Discovery (Phase 2) | **`tt` binary** (tamnd/tiktok-cli, Go) via subprocess, optional dependency | Works without login; X-Bogus signing + SSR parsing already implemented; don't port to Python |
+| Tầng | Lựa chọn | Vì sao |
+|------|----------|--------|
+| Ngôn ngữ | **Python 3.11+** | Mọi repo tham khảo đều Python; thân thiện agent; yt-dlp/whisper ưu tiên Python |
+| CLI framework | **Typer + Rich** | Được `omni-transcriber`, `gerardnico/transcribe`, `tiktok-extractor` dùng; progress bar đẹp |
+| Package manager | **uv** (PEP 723 tuỳ chọn) | Pattern `uv run` zero-install (jadenmaciel/transcript); `uv tool install` cho bản global |
+| Download/phụ đề | **yt-dlp** (Python API `yt_dlp.YoutubeDL`, chỉ subprocess khi cần) | Mọi repo tham khảo đều dùng; Python API cho lỗi có cấu trúc thay vì parse text CLI |
+| Tách audio | **ffmpeg** subprocess (chỉ khi cần; faster-whisper decode trực tiếp qua PyAV) | PyAV bundled của faster-whisper xử lý mp4/mkv/mp3 — **có thể không cần ffmpeg chút nào** |
+| STT engine | **faster-whisper** mặc định; **mlx-whisper** tự detect trên Apple Silicon | pattern dual-backend của douyin-teardown; faster-whisper cài bằng pip, không compile; mlx nhanh ~15x realtime trên M-series |
+| Khám phá (Phase 2) | Binary **`tt`** (tamnd/tiktok-cli, Go) qua subprocess, dep tuỳ chọn | Hoạt động không cần login; đã có X-Bogus signing + SSR parsing; không port sang Python |
 
-**Key decision: faster-whisper instead of whisper.cpp.**
-Reasons: (1) `pip install`, no cmake/compile; (2) PyAV decodes containers directly → no ffmpeg extract step; (3) int8 CPU is fast enough for short TikTok videos; (4) whisper.cpp only wins on Apple Silicon with CoreML — mlx-whisper covers that better.
+**Quyết định chính: faster-whisper thay vì whisper.cpp.**
+Lý do: (1) `pip install`, không cần cmake/compile; (2) PyAV decode container trực tiếp → không cần bước extract ffmpeg; (3) int8 CPU đủ nhanh cho video TikTok ngắn; (4) whisper.cpp chỉ thắng trên Apple Silicon với CoreML — mlx-whisper cover tốt hơn.
 
 ---
 
-## 3. Architecture
+## 3. Kiến trúc
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -79,183 +80,182 @@ Reasons: (1) `pip install`, no cmake/compile; (2) PyAV decodes containers direct
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Design principles (from research)
+### Nguyên tắc thiết kế (từ research)
 
-1. **Caption-first, Whisper-fallback** — from `dedene/skills` + `gerardnico/transcribe`. Most TikToks have auto-captions → saves ~90% compute.
-2. **Known yt-dlp subtleties** (important, keep as code comments):
-   - Caption info does **not** appear in `extract_info` JSON for TikTok → must call `--list-subs` or download subs separately (dedene/skills documents this gotcha).
+1. **Ưu tiên phụ đề, Whisper dự phòng** — từ `dedene/skills` + `gerardnico/transcribe`. Đa số TikTok có auto-caption → tiết kiệm ~90% compute.
+2. **Các điểm yt-dlp dễ sai đã biết** (quan trọng, giữ làm comment trong code):
+   - Thông tin phụ đề **không** xuất hiện trong JSON `extract_info` của TikTok → phải gọi `--list-subs` hoặc tải subs riêng (dedene/skills ghi nhận gotcha này).
    - `--write-subs --write-auto-subs --sub-format vtt --sub-langs "vi.*,en.*,all"`.
-   - Format select: `bestaudio/best` for audio-only; if video needed (phase 3 OCR) use `best[vcodec=h264]` — bytevc1/h265 often video-only (noted in tiktok-extractor, tiktok-transcript).
-   - Shortlinks `vm./vt.tiktok.com` → yt-dlp resolves them; get video_id from `info["id"]`, never parse the URL.
-3. **stdout carries only transcript/plain output; all logs → stderr** (omni-transcriber hard constraint) → agent can pipe safely.
-4. **Idempotent**: `transcript.json` exists + no `--refresh` → skip (tiktok-extractor pattern).
-5. **Lazy imports**: faster-whisper/model only loads when actually transcribing — `tiktok --help` < 100ms (omni-transcriber).
-6. **Anti-hallucination STT settings** (douyin-teardown): `condition_on_previous_text=False`, `vad_filter=True`, `beam_size=1`, `temperature=0`.
+   - Format select: `bestaudio/best` cho audio-only; nếu cần video (OCR phase 3) dùng `best[vcodec=h264]` — bytevc1/h265 thường chỉ có video không audio (ghi nhận trong tiktok-extractor, tiktok-transcript).
+   - Shortlink `vm./vt.tiktok.com` → yt-dlp tự resolve; lấy video_id từ `info["id"]`, không bao giờ parse URL.
+3. **stdout chỉ chứa transcript/plain output; mọi log → stderr** (ràng buộc cứng kiểu omni-transcriber) → agent pipe an toàn.
+4. **Idempotent**: `transcript.json` đã tồn tại + không `--refresh` → skip (pattern tiktok-extractor).
+5. **Lazy import**: faster-whisper/model chỉ load khi thật sự phiên âm — `tiktok --help` < 100ms (omni-transcriber).
+6. **Cấu hình STT chống hallucination** (douyin-teardown): `condition_on_previous_text=False`, `vad_filter=True`, `beam_size=1`, `temperature=0`.
 
 ---
 
-## 4. Output layout
+## 4. Layout output
 
 ```
-tiktok-transcripts/                  # --output-dir, default ./tiktok-transcripts
+tiktok-transcripts/                  # --output-dir, mặc định ./tiktok-transcripts
 ├── VIDEO_ID/                        # yt-dlp info["id"], sanitize [A-Za-z0-9_-]
-│   ├── source.info.json             # raw yt-dlp info (written once)
-│   ├── metadata.json                # compact: title, uploader, duration, counts, url
-│   ├── subs/                        # raw caption files from yt-dlp
+│   ├── source.info.json             # info yt-dlp thô (ghi một lần)
+│   ├── metadata.json                # gọn: title, uploader, duration, counts, url
+│   ├── subs/                        # file phụ đề thô từ yt-dlp
 │   │   └── VIDEO_ID.vie.vtt ...
-│   ├── audio.wav                    # whisper path only (16k mono if ffmpeg; raw if PyAV)
-│   ├── transcript.vtt               # canonical timestamped (caption or whisper)
+│   ├── audio.wav                    # chỉ đường whisper (16k mono nếu ffmpeg; raw nếu PyAV)
+│   ├── transcript.vtt               # canonical có timestamp (phụ đề hoặc whisper)
 │   ├── transcript.srt
-│   ├── transcript.txt               # plain text, no timestamps — what agents read
+│   ├── transcript.txt               # plain text, không timestamp — thứ agent đọc
 │   ├── transcript.json              # [{start,end,text,confidence?}]
-│   ├── transcript.md                # # title + metadata + [mm:ss] cues
-│   └── whisper.log                  # debug on fallback path
-├── batch-2026-11-24/                # optional: group a batch run in one dir
-└── index.jsonl                      # append-only log of every processed video
+│   ├── transcript.md                # # title + metadata + cue [mm:ss]
+│   └── whisper.log                  # debug ở đường fallback
+├── batch-2026-11-24/                # tuỳ chọn: gom một lần chạy batch vào một thư mục
+└── index.jsonl                      # log append-only của mọi video đã xử lý
 ```
 
-`index.jsonl` record: `{video_id, url, status: caption|whisper|no-captions|failed, language, cue_count, duration, processed_at, artifact_dir}` — enables `tiktok list`/digest later without a DB.
+Record `index.jsonl`: `{video_id, url, status: caption|whisper|no-captions|failed, language, cue_count, duration, processed_at, artifact_dir}` — cho phép `tiktok list`/digest sau này mà không cần DB.
 
 ---
 
-## 5. Command spec (detailed)
+## 5. Spec lệnh (chi tiết)
 
 ### `tiktok transcript <urls...>`
 
 ```
 tiktok transcript https://www.tiktok.com/@user/video/123
 
-tiktok transcript url1 url2 url3          # sequential
+tiktok transcript url1 url2 url3          # tuần tự
 
 Options:
-  -o, --output-dir DIR        default ./tiktok-transcripts
-  -m, --model NAME            whisper model: tiny|base|small|turbo|large-v3-turbo
-                              default: small (faster) / mlx-community/whisper-large-v3-turbo (mlx)
-  -l, --language LANG         whisper language hint; auto-detect by default
-  --whisper auto|always|never auto = whisper only when no captions (DEFAULT)
-                              always = skip captions, force whisper
-                              never = captions only; no-caption videos -> status no-captions
-  --engine auto|faster|mlx    auto = mlx on Apple Silicon, faster otherwise
-  --format FMT                txt|srt|vtt|json|md|all   default all
-  --keep-audio                keep audio.wav (default: delete after transcribe)
-  --refresh                   bypass cache, re-fetch subs/audio + re-transcribe
-  --cookies-from-browser B    firefox|chrome|safari... (optional)
-  --cookies FILE              Netscape cookies.txt (optional)
-  -v, --verbose               stderr debug
+  -o, --output-dir DIR        mặc định ./tiktok-transcripts
+  -m, --model NAME            model whisper: tiny|base|small|turbo|large-v3-turbo
+                              mặc định: small (faster) / mlx-community/whisper-large-v3-turbo (mlx)
+  -l, --language LANG         gợi ý ngôn ngữ whisper; mặc định tự detect
+  --whisper auto|always|never auto = whisper chỉ khi không có phụ đề (MẶC ĐỊNH)
+                              always = bỏ qua phụ đề, ép whisper
+                              never = chỉ phụ đề; video không phụ đề -> status no-captions
+  --engine auto|faster|mlx    auto = mlx trên Apple Silicon, faster còn lại
+  --format FMT                txt|srt|vtt|json|md|all   mặc định all
+  --keep-audio                giữ audio.wav (mặc định: xoá sau khi transcribe)
+  --refresh                   bỏ cache, tải lại subs/audio + phiên âm lại
+  --cookies-from-browser B    firefox|chrome|safari... (tuỳ chọn)
+  --cookies FILE              cookies.txt Netscape (tuỳ chọn)
+  -v, --verbose               debug ra stderr
 ```
 
-Per-URL flow:
+Flow từng URL:
 
 ```
-1. normalize url → yt_dlp extract_info(download=False) → video_id, metadata
-2. cache check: transcript.json exists & !refresh → print path, done
-3. CAPTION PATH:
-   yt_dlp download subs only:
+1. chuẩn hoá url → yt_dlp extract_info(download=False) → video_id, metadata
+2. kiểm tra cache: transcript.json đã có & !refresh → in path, xong
+3. ĐƯỜNG PHỤ ĐỀ:
+   yt_dlp chỉ tải subs:
      --skip-download --write-subs --write-auto-subs --sub-format vtt
      --sub-langs "vi.*,en.*,vi,en,all" -o subs/%(id)s.%(ext)s
-   → find .vtt preferring: vie > vie-* > en > auto-generated > any
+   → tìm .vtt ưu tiên: vie > vie-* > en > auto-generated > bất kỳ
    → parse VTT → cues[{start,end,text}]
-   → render all formats → transcript_source="tiktok-captions:<lang>"
-4. WHISPER PATH (if no caption and --whisper != never):
-   yt_dlp download bestaudio → temp file
-   faster-whisper transcribe (or mlx_whisper.transcribe)
-   → segments → cues → render formats → transcript_source="whisper:<model>:<lang>"
-   → delete audio unless --keep-audio
-5. write metadata.json + append index.jsonl + print compact summary to stdout
+   → render mọi định dạng → transcript_source="tiktok-captions:<lang>"
+4. ĐƯỜNG WHISPER (nếu không có phụ đề và --whisper != never):
+   yt_dlp tải bestaudio → file temp
+   faster-whisper transcribe (hoặc mlx_whisper.transcribe)
+   → segments → cues → render định dạng → transcript_source="whisper:<model>:<lang>"
+   → xoá audio trừ khi --keep-audio
+5. ghi metadata.json + append index.jsonl + in tóm tắt gọn ra stdout
 ```
 
-Known edge cases (handle in code):
-- Video with no audio track → `status: no-audio`, still emit metadata.
-- Photo/slideshow post (`imagePost`) → `status: photo-post`, skip early.
-- Private/deleted/age-gated → yt-dlp raises → `status: failed`, reason into index.
-- WAF/rate-limit → retry once after 5s, then fail with `--cookies-from-browser` hint.
-- Caption files with consecutive duplicate cues (TikTok auto-caption repeats) → dedupe in parse_vtt.
-- `vm./vt.` shortlinks → resolved by yt-dlp; don't parse IDs manually.
+Edge case cần xử lý trong code:
+- Video không có track audio → `status: no-audio`, vẫn xuất metadata.
+- Photo/slideshow post (`imagePost`) → `status: photo-post`, skip sớm.
+- Private/đã xoá/giới hạn tuổi → yt-dlp raise → `status: failed`, lý do vào index.
+- WAF/rate-limit → retry một lần sau 5s, rồi fail kèm gợi ý `--cookies-from-browser`.
+- File phụ đề có cue trùng liên tiếp (auto-caption TikTok lặp) → dedupe khi parse_vtt.
+- Shortlink `vm./vt.` → yt-dlp tự resolve; không parse ID thủ công.
 
 ### `tiktok batch <file>`
 
 ```
-tiktok batch urls.txt [-o DIR] [--whisper auto] [same flags as transcript]
+tiktok batch urls.txt [-o DIR] [--whisper auto] [cùng flag như transcript]
 
-urls.txt format:
-  # comment line
+Định dạng urls.txt:
+  # dòng comment
   https://www.tiktok.com/@a/video/111
   https://vm.tiktok.com/XYZ
 
-→ sequential (MVP); parallel --jobs N in phase 2+ if needed
-→ per-video try/except — one bad URL never kills the batch
-→ end-of-batch summary table: ok / caption / whisper / failed counts
+→ tuần tự (MVP); song song --jobs N ở phase 2+ nếu cần
+→ try/except từng video — một URL hỏng không giết cả batch
+→ bảng tổng kết cuối batch: đếm ok / caption / whisper / failed
 ```
 
 ### `tiktok info <url>` (phase 2)
 
-Metadata only via `--dump-single-json` + `--list-subs`; JSON to stdout. Fast, no download.
+Chỉ metadata qua `--dump-single-json` + `--list-subs`; JSON ra stdout. Nhanh, không tải.
 
 ### `tiktok search|discover|list|tag|trending` (phase 2)
 
-Wrappers calling the `tt` binary (optional dep, `tiktok doctor` checks it). `tt` emits JSONL → parse → print table. Without `tt` → clear "install tt" error; transcript/batch unaffected.
+Wrapper gọi binary `tt` (dep tuỳ chọn, `tiktok doctor` kiểm tra). `tt` xuất JSONL → parse → in bảng. Không có `tt` → lỗi rõ "cài tt"; transcript/batch không ảnh hưởng.
 
 ### `tiktok doctor`
 
-Checks: yt-dlp version, ffmpeg (warn only — not strictly required), faster-whisper import, mlx-whisper (if arm64), model cached?, `tt` binary (phase 2), network to tiktok.com, output dir writable. PASS/WARN/FAIL table + fix hints.
+Kiểm tra: phiên bản yt-dlp, ffmpeg (chỉ cảnh báo — không bắt buộc), import faster-whisper, mlx-whisper (nếu arm64), model đã cache?, binary `tt` (phase 2), mạng tới tiktok.com, thư mục output ghi được. Bảng PASS/WARN/FAIL + gợi ý fix.
 
 ---
 
-## 6. Module spec
+## 6. Spec module
 
 ### `core/url.py`
-- `classify_url(url) -> Video|Photo|Profile|Feed|Short|Other` — regex path `/@user/video/(\d+)`, `/photo/`, hosts `vm./vt.` (from `tiktok-transcript/lib/tiktok.js`).
-- Never parse video_id from shortlinks — let yt-dlp resolve.
+- `classify_url(url) -> Video|Photo|Profile|Feed|Short|Other` — regex path `/@user/video/(\d+)`, `/photo/`, host `vm./vt.` (từ `tiktok-transcript/lib/tiktok.js`).
+- Không bao giờ parse video_id từ shortlink — để yt-dlp resolve.
 
 ### `core/downloader.py`
-- `YtdlpClient` wrapping `yt_dlp.YoutubeDL`:
+- `YtdlpClient` bọc `yt_dlp.YoutubeDL`:
   - `extract_info(url, download=False)`
-  - `list_subtitles(url) -> {lang: [formats]}` — workaround for the caption gotcha: run with `--list-subs`-equivalent or download subs into temp dir; don't trust `info["subtitles"]` alone for TikTok.
+  - `list_subtitles(url) -> {lang: [formats]}` — workaround gotcha phụ đề: chạy tương đương `--list-subs` hoặc tải subs vào temp dir; đừng tin `info["subtitles"]` một mình với TikTok.
   - `download_subtitles(url, out_dir, langs)` → list[Path] .vtt
   - `download_audio(url, tmp_dir)` → Path
   - `download_video_h264(url, out_dir)` (phase 3)
-- Shared YDL opts: `quiet`, `no_warnings`, `noplaylist`, `socket_timeout=30`, `retries=3`, `js_runtimes` enabling deno/node if present (omni-transcriber `_enabled_js_runtimes` — needed for YouTube, harmless for TikTok).
-- Cookies: `cookiesfrombrowser`/`cookiefile` opts only when flags passed.
+- YDL opts chung: `quiet`, `no_warnings`, `noplaylist`, `socket_timeout=30`, `retries=3`, `js_runtimes` bật deno/node nếu có (omni-transcriber `_enabled_js_runtimes` — cần cho YouTube, vô hại với TikTok).
+- Cookies: opt `cookiesfrombrowser`/`cookiefile` chỉ khi truyền flag.
 
 ### `core/captions.py`
-- `parse_vtt(path) -> list[Cue{start,end,start_time,end_time,text}]` — port from dedene/skills `parse_vtt` + `strip_vtt_markup` (handles `<c>`, `<00:00:00.000>`, `\h`, HTML entities).
-- `pick_caption(candidates, preference=["vie","vi","en","en-US"])` — manual sub > auto sub; vie > en > first.
-- `dedupe_cues(cues)` — drop consecutive duplicate texts (auto-caption repeats).
-- `cues_to_paragraphs(cues, gap_threshold=2.0)` — merge cues → paragraphs for txt/md.
+- `parse_vtt(path) -> list[Cue{start,end,start_time,end_time,text}]` — port từ `parse_vtt` + `strip_vtt_markup` của dedene/skills (xử lý `<c>`, `<00:00:00.000>`, `\h`, HTML entity).
+- `pick_caption(candidates, preference=["vie","vi","en","en-US"])` — sub thủ công > auto sub; vie > en > đầu tiên.
+- `dedupe_cues(cues)` — bỏ text trùng liên tiếp (auto-caption lặp).
+- `cues_to_paragraphs(cues, gap_threshold=2.0)` — gộp cue → đoạn cho txt/md.
 
 ### `core/stt.py`
-- `TranscribeEngine` protocol: `transcribe(audio_path, language) -> list[Cue]`.
-- `FasterWhisperEngine`: `WhisperModel(model, device="auto", compute_type="auto")`, cache per (model,device). Settings: `vad_filter=True`, `condition_on_previous_text=False`, `beam_size=1`, `temperature=0`.
-- `MlxEngine` (darwin/arm64 only): `mlx_whisper.transcribe(path_or_hf_repo=..., language=...)`.
-- `resolve_engine(auto)` → mlx if `platform.machine()=="arm64"` and import works, else faster.
-- Model map: `small` → faster `small`; mlx `small` → `mlx-community/whisper-small-mlx` (table from douyin-teardown `_MLX_MODEL_MAP`).
+- Protocol `TranscribeEngine`: `transcribe(audio_path, language) -> list[Cue]`.
+- `FasterWhisperEngine`: `WhisperModel(model, device="auto", compute_type="auto")`, cache theo (model,device). Settings: `vad_filter=True`, `condition_on_previous_text=False`, `beam_size=1`, `temperature=0`.
+- `MlxEngine` (chỉ darwin/arm64): `mlx_whisper.transcribe(path_or_hf_repo=..., language=...)`.
+- `resolve_engine(auto)` → mlx nếu `platform.machine()=="arm64"` và import được, ngược lại faster.
+- Bảng model: `small` → faster `small`; mlx `small` → `mlx-community/whisper-small-mlx` (bảng từ `_MLX_MODEL_MAP` của douyin-teardown).
 
 ### `core/artifacts.py`
 - `VideoDir(video_id)` path builder, `is_processed()`, `write_outputs(cues, meta, source)`, `append_index(record)`.
-- Filename sanitize: `[^
-A-Za-z0-9_-]` → strip; validate `^[\w-]{6,}$` anyway.
+- Sanitize tên file: `[^\nA-Za-z0-9_-]` → strip; vẫn validate `^[\w-]{6,}$`.
 
 ### `core/errors.py`
-- `UserError(msg, hint, exit_code)` → print `error: msg\nhint: ...` to stderr, exit code.
-- `_translate_yt_dlp_error(exc)` — port `_ERROR_RULES` from omni-transcriber downloader.py: map "private video", "members-only", "sign in", "rate-limit", "geo-blocked", "unsupported url" → message + hint (English, tooling convention), hint suggests `--cookies-from-browser`.
+- `UserError(msg, hint, exit_code)` → in `error: msg\nhint: ...` ra stderr, exit code.
+- `_translate_yt_dlp_error(exc)` — port `_ERROR_RULES` từ omni-transcriber downloader.py: map "private video", "members-only", "sign in", "rate-limit", "geo-blocked", "unsupported url" → message + hint (tiếng Anh theo convention tooling), hint gợi ý `--cookies-from-browser`.
 
 ### `commands/`
-- `transcript.py`: loop URLs, `Progress` rich bar per video (download / transcribe %), end summary.
-- `batch.py`: read file, filter comments/blanks, reuse transcript pipeline.
-- `info.py`, `doctor.py` in phase 2+.
+- `transcript.py`: loop URL, `Progress` bar rich cho từng video (download / transcribe %), bảng tổng kết cuối.
+- `batch.py`: đọc file, lọc comment/dòng trống, tái dùng pipeline transcript.
+- `info.py`, `doctor.py` ở phase 2+.
 
 ---
 
-## 7. Repo layout
+## 7. Layout repo
 
 ```
 tiktok_cli/
-├── PLAN.md                  # this file
+├── PLAN.md                  # file này
 ├── README.md
 ├── pyproject.toml           # uv/pip, entry point `tiktok`
 ├── src/tiktok_cli/
 │   ├── __init__.py          # __version__
-│   ├── cli.py               # Typer app root, subcommand registration
+│   ├── cli.py               # Typer app root, đăng ký subcommand
 │   ├── core/
 │   │   ├── url.py
 │   │   ├── downloader.py
@@ -272,109 +272,109 @@ tiktok_cli/
 │       └── doctor.py
 ├── tests/
 │   ├── conftest.py          # fixtures: sample .vtt, fake yt-dlp info json
-│   ├── test_captions.py     # parse_vtt, dedupe, pick_caption — pure, no network
+│   ├── test_captions.py     # parse_vtt, dedupe, pick_caption — thuần, không mạng
 │   ├── test_url.py          # classify_url
 │   ├── test_artifacts.py    # layout, idempotency
-│   ├── test_stt.py          # engine selection logic (mocked)
+│   ├── test_stt.py          # logic chọn engine (mock)
 │   └── fixtures/
 │       ├── sample.vtt
 │       ├── tiktok_info.json
 │       └── urls.txt
-└── .github/workflows/ci.yml # lint (ruff) + pytest (no-network tests only)
+└── .github/workflows/ci.yml # lint (ruff) + pytest (chỉ test không mạng)
 ```
 
-`pyproject.toml` deps:
+Deps trong `pyproject.toml`:
 ```toml
 dependencies = [
   "typer>=0.12", "rich>=13.7",
-  "yt-dlp>=2025.1",           # floor pin, no floating latest
-  "faster-whisper>=1.1",      # ctranslate2>=4.6.3 floor for new GPUs (omni-transcriber lesson)
+  "yt-dlp>=2025.1",           # floor pin, không floating latest
+  "faster-whisper>=1.1",      # ctranslate2>=4.6.3 floor cho GPU mới (bài học omni-transcriber)
 ]
 [project.optional-dependencies]
-mlx = ["mlx-whisper>=0.4"]    # Apple Silicon only
+mlx = ["mlx-whisper>=0.4"]    # chỉ Apple Silicon
 ```
 
-No torch, no openai-whisper, no pydub — lean like omni-transcriber.
+Không torch, không openai-whisper, không pydub — gọn như omni-transcriber.
 
 ---
 
-## 8. Implementation roadmap (phases)
+## 8. Lộ trình triển khai (các phase)
 
-### Phase 0 — scaffold (small)
-- pyproject, cli.py with `transcript` stub, `doctor` checking yt-dlp/ffmpeg.
-- `uv sync` works, `tiktok --help` < 100ms.
+### Phase 0 — scaffold (nhỏ)
+- pyproject, cli.py với `transcript` stub, `doctor` kiểm tra yt-dlp/ffmpeg.
+- `uv sync` chạy được, `tiktok --help` < 100ms.
 
-### Phase 1 — caption path (no Whisper)
+### Phase 1 — đường phụ đề (không Whisper)
 - downloader.list_subtitles + download_subs
 - captions.parse_vtt/pick/dedupe/render
 - artifacts layout + index.jsonl
-- `tiktok transcript <url>` end-to-end with a captioned video → verify on 1 real Vietnamese + 1 English video.
-- Tests: parse_vtt fixtures, url classify, artifacts.
+- `tiktok transcript <url>` end-to-end với video có phụ đề → verify trên 1 video tiếng Việt + 1 tiếng Anh thật.
+- Test: fixture parse_vtt, classify url, artifacts.
 
-### Phase 2 — Whisper fallback
-- stt.py faster + mlx engines
-- audio download path
-- `--whisper/--engine/--model` flags
-- Test on a no-caption video; benchmark `small` vs `turbo`.
+### Phase 2 — Whisper dự phòng
+- stt.py engine faster + mlx
+- đường tải audio
+- flag `--whisper/--engine/--model`
+- Test trên video không phụ đề; benchmark `small` vs `turbo`.
 
 ### Phase 3 — batch + hardening
-- `tiktok batch`, multi-URL, summary table
-- full error translation, retry/WAF hints
-- `--cookies-from-browser` path
-- README: install (uv tool install), usage, limitations (private/WAF/no-caption coverage), model benchmark table.
+- `tiktok batch`, multi-URL, bảng tổng kết
+- dịch lỗi đầy đủ, retry/WAF hints
+- đường `--cookies-from-browser`
+- README: install (uv tool install), usage, limitations (private/WAF/coverage không phụ đề), bảng benchmark model.
 
-### Phase 4 — discovery (optional, `tt`-dependent)
+### Phase 4 — khám phá (tuỳ chọn, phụ thuộc `tt`)
 - `tiktok info`, `list`, `search`, `tag`, `trending`, `discover`
-- `core/discovery.py` wraps `tt` subprocess → JSONL parse
-- doctor checks `tt`
-- **Gate**: only after MVP is stable; search depends on WAF — document "best effort".
+- `core/discovery.py` bọc subprocess `tt` → parse JSONL
+- doctor kiểm tra `tt`
+- **Cổng**: chỉ làm sau khi MVP ổn định; search phụ thuộc WAF — ghi "best effort".
 
-### Phase 5 — nice-to-have (consider, not committed)
-- `--screen` OCR keyframes (tiktok-extractor approach: ffmpeg scene detect + tesseract).
-- `--llm` markdown output (omni-transcriber `_llm_body`: timestamped ~150-word paragraphs).
-- `--jobs N` parallel (omni-transcriber pipeline: fetch queue + transcribe queue, memory-aware).
-- `tiktok digest` — read index.jsonl → summary of processed videos.
-
----
-
-## 9. Test plan
-
-**Unit (no network, CI-safe):**
-- `parse_vtt`: cue parsing, `<c>` tags, duplicate removal, timestamp format.
-- `classify_url`: all TikTok URL kinds.
-- `pick_caption`: preference order vie > en > auto.
-- `render_*`: golden files txt/srt/vtt/json/md.
-- `is_processed` / index append.
-- `_translate_yt_dlp_error`: mock exceptions → messages.
-
-**Integration (manual, needs network + TikTok):**
-- 1 Vietnamese captioned video → caption path.
-- 1 English captioned video.
-- 1 no-caption video → whisper path, check `small` vs `turbo` quality.
-- 1 vm.tiktok.com shortlink.
-- 1 private video → graceful failure.
-- Batch of 10 URLs → correct summary.
-
-**MVP acceptance:** `tiktok transcript <any public TikTok URL>` → artifact folder with all 5 formats + metadata.json + index.jsonl entry, ≤2 min for a <3-min video on Apple Silicon.
+### Phase 5 — nice-to-have (cân nhắc, chưa cam kết)
+- OCR keyframe `--screen` (hướng tiktok-extractor: ffmpeg scene detect + tesseract).
+- Output markdown `--llm` (omni-transcriber `_llm_body`: đoạn ~150 từ có timestamp).
+- Song song `--jobs N` (pipeline omni-transcriber: queue fetch + queue transcribe, nhận biết memory).
+- `tiktok digest` — đọc index.jsonl → tóm tắt video đã xử lý.
 
 ---
 
-## 10. Risks & mitigations
+## 9. Kế hoạch test
 
-| Risk | Mitigation |
-|------|-----------|
-| yt-dlp TikTok extractor breaks (TikTok changes API often) | Pin `yt-dlp` floor, `tiktok doctor` reports version, docs for `uv tool install --force` upgrade; caption path dies with it — accepted, that's scraping reality |
-| Whisper hallucination on music/noise | `condition_on_previous_text=False` + VAD + no_speech_prob filter (douyin-teardown recipe); document `--whisper never` for captions-only users |
-| Vietnamese quality of `small` insufficient | Benchmark on real videos; default may move to `turbo` (1.6GB, ~large-v3 quality, fast) — decide after testing |
-| faster-whisper vs mlx-whisper wrong choice | `--engine` flag override; auto is only the default |
-| `tt` binary search hit by WAF | Phase 4 gate; document "best effort"; SSR plane sturdier than API plane — `tt video` less risky than `tt search` |
-| ffmpeg missing on user machine | faster-whisper/PyAV decodes directly → ffmpeg **not required**; doctor only warns |
+**Unit (không mạng, an toàn cho CI):**
+- `parse_vtt`: parse cue, tag `<c>`, xoá trùng, format timestamp.
+- `classify_url`: mọi loại URL TikTok.
+- `pick_caption`: thứ tự ưu tiên vie > en > auto.
+- `render_*`: file golden txt/srt/vtt/json/md.
+- `is_processed` / append index.
+- `_translate_yt_dlp_error`: mock exception → message.
+
+**Tích hợp (thủ công, cần mạng + TikTok):**
+- 1 video tiếng Việt có phụ đề → đường caption.
+- 1 video tiếng Anh có phụ đề.
+- 1 video không phụ đề → đường whisper, so chất lượng `small` vs `turbo`.
+- 1 shortlink vm.tiktok.com.
+- 1 video private → fail êm.
+- Batch 10 URL → tổng kết đúng.
+
+**Tiêu chí nghiệm thu MVP:** `tiktok transcript <bất kỳ URL TikTok công khai>` → thư mục artifact đủ 5 định dạng + metadata.json + entry index.jsonl, ≤2 phút cho video <3 phút trên Apple Silicon.
 
 ---
 
-## 11. Locked decisions
+## 10. Rủi ro & giảm thiểu
 
-1. **Default model**: `small` (~466MB) for faster-whisper; mlx → `mlx-community/whisper-small-mlx`. README documents upgrading to `turbo`/`large-v3-turbo`.
-2. **Audio**: deleted after transcribe; `--keep-audio` opt-in.
-3. **Output dir**: `./tiktok-transcripts` cwd-relative; `-o` override.
-4. **Discovery**: build **all** — `info`, `list`, `search`, `tag`, `trending`, `discover` via `tt` binary in v1 (still optional dep, degrades gracefully without `tt`).
+| Rủi ro | Giảm thiểu |
+|--------|-----------|
+| Extractor TikTok của yt-dlp hỏng (TikTok hay đổi API) | Pin floor `yt-dlp`, `tiktok doctor` báo phiên bản, docs `uv tool install --force`; đường caption chết theo — chấp nhận, đó là thực tế scraping |
+| Whisper hallucination trên nhạc/nhiễu | `condition_on_previous_text=False` + VAD + lọc no_speech_prob (công thức douyin-teardown); ghi `--whisper never` cho user chỉ muốn phụ đề |
+| Chất lượng tiếng Việt của `small` không đủ | Benchmark trên video thật; default có thể chuyển `turbo` (1.6GB, ~chất lượng large-v3, nhanh) — quyết sau khi test |
+| faster-whisper vs mlx-whisper chọn sai | Flag override `--engine`; auto chỉ là mặc định |
+| Binary `tt` bị WAF chặn khi search | Cổng phase 4; ghi "best effort"; mặt phẳng SSR bền hơn API — `tt video` ít rủi ro hơn `tt search` |
+| Máy user thiếu ffmpeg | faster-whisper/PyAV decode trực tiếp → ffmpeg **không bắt buộc**; doctor chỉ cảnh báo |
+
+---
+
+## 11. Quyết định đã chốt
+
+1. **Model mặc định**: `small` (~466MB) cho faster-whisper; mlx → `mlx-community/whisper-small-mlx`. README ghi cách nâng `turbo`/`large-v3-turbo`.
+2. **Audio**: xoá sau khi transcribe; `--keep-audio` opt-in.
+3. **Thư mục output**: `./tiktok-transcripts` tương đối cwd; override bằng `-o`.
+4. **Khám phá**: build **tất cả** — `info`, `list`, `search`, `tag`, `trending`, `discover` qua binary `tt` trong v1 (vẫn là dep tuỳ chọn, degrade nhẹ nhàng khi thiếu `tt`).
