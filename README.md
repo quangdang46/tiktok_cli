@@ -189,8 +189,10 @@ tiktok-transcripts/                  # --output-dir
   degrade gracefully — `transcript`/`batch` are unaffected.
 - **No captions + `--whisper never`** produces `no-captions`: metadata and
   an index entry, but no transcript files.
-- **Photo/slideshow posts** (`/photo/` URLs, image posts) are skipped with
-  `photo-post` status — there is no audio to transcribe.
+- **Photo/slideshow posts** (`/photo/` URLs): yt-dlp cannot read `/photo/`
+  URLs, so the CLI rewrites them to the equivalent `/video/` form and
+  transcribes the post's audio track (music/speech). The slideshow images
+  themselves are not downloaded — they live behind TikTok's signed API.
 - **No LLM features.** This CLI extracts transcripts only; summarization,
   chaptering, and analysis are the caller's job.
 

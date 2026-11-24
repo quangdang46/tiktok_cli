@@ -75,14 +75,32 @@ def classify_url(url: str) -> UrlKind:
 
 
 def video_id_from_url(url: str) -> str | None:
-    """Extract the numeric video id from a canonical video URL.
+    """Extract the numeric post id from a canonical post URL.
 
-    Returns None for shortlinks and non-video paths - those need yt-dlp
-    resolution first.
+    Photo posts share the same numeric id space as videos, so ``/photo/``
+    paths match too. Returns None for shortlinks and non-post paths -
+    those need yt-dlp resolution first.
     """
     try:
         path = urlparse(url).path
     except ValueError:
         return None
-    match = _VIDEO_PATH.match(path) or _BARE_VIDEO_PATH.match(path)
+    match = _VIDEO_PATH.match(path) or _PHOTO_PATH.match(path) or _BARE_VIDEO_PATH.match(path)
     return match.group(1) if match else None
+
+
+def photo_to_video_url(url: str) -> str:
+    """Rewrite ``/@user/photo/<id>`` to ``/@user/video/<id>``.
+
+    yt-dlp's TikTok extractor rejects ``/photo/`` URLs outright, but the
+    same numeric id resolves fine under ``/video/`` — photo posts are
+    image slideshows with an audio track, which yt-dlp downloads as
+    audio-only. Non-photo URLs pass through unchanged.
+    """
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return url
+    if _PHOTO_PATH.match(parsed.path):
+        return parsed._replace(path=parsed.path.replace("/photo/", "/video/", 1)).geturl()
+    return url

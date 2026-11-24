@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from tiktok_cli.core.url import classify_url, is_tiktok_url, video_id_from_url
+from tiktok_cli.core.url import (
+    classify_url,
+    is_tiktok_url,
+    photo_to_video_url,
+    video_id_from_url,
+)
 
 VIDEO_URL = "https://www.tiktok.com/@someuser/video/7312345678901234567"
 VIDEO_ID = "7312345678901234567"
@@ -119,7 +124,6 @@ def test_video_id_from_url() -> None:
     [
         "https://vm.tiktok.com/ZMxxxxxx/",
         "https://www.tiktok.com/t/ZTRabcde/",
-        "https://www.tiktok.com/@user/photo/123",
         "https://www.tiktok.com/@user",
         "https://www.tiktok.com/foryou",
         "not a url",
@@ -128,3 +132,21 @@ def test_video_id_from_url() -> None:
 )
 def test_video_id_from_url_none(url: str) -> None:
     assert video_id_from_url(url) is None
+
+
+class TestPhotoPosts:
+    PHOTO = "https://www.tiktok.com/@user/photo/7707892619572972813"
+    VIDEO = "https://www.tiktok.com/@user/video/7707892619572972813"
+
+    def test_classify_photo(self):
+        assert classify_url(self.PHOTO) == "photo"
+
+    def test_video_id_from_photo_url(self):
+        assert video_id_from_url(self.PHOTO) == "7707892619572972813"
+
+    def test_photo_to_video_url_rewrites(self):
+        assert photo_to_video_url(self.PHOTO) == self.VIDEO
+
+    def test_photo_to_video_url_passthrough(self):
+        assert photo_to_video_url(self.VIDEO) == self.VIDEO
+        assert photo_to_video_url("https://vm.tiktok.com/abc/") == "https://vm.tiktok.com/abc/"

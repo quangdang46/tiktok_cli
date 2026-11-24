@@ -46,7 +46,12 @@ from tiktok_cli.core.artifacts import (
 from tiktok_cli.core.captions import Cue
 from tiktok_cli.core.downloader import YtdlpClient
 from tiktok_cli.core.errors import UserError
-from tiktok_cli.core.url import classify_url, is_tiktok_url, video_id_from_url
+from tiktok_cli.core.url import (
+    classify_url,
+    is_tiktok_url,
+    photo_to_video_url,
+    video_id_from_url,
+)
 
 _WHISPER_MODES = frozenset({"auto", "always", "never"})
 _ENGINE_NAMES = frozenset({"auto", "faster", "mlx"})
@@ -319,14 +324,18 @@ def process_video(
     video_dir: VideoDir | None = None
     info: dict[str, Any] = {}
 
+    # Photo posts (/photo/<id>) are rejected by yt-dlp's TikTok extractor,
+    # but the same id resolves under /video/ and carries an audio track.
+    fetch_url = photo_to_video_url(url)
+
     try:
         note("fetching video info")
-        info = client.extract_info(url) or {}
+        info = client.extract_info(fetch_url) or {}
         video_id = str(info.get("id") or "")
         video_dir = VideoDir(output_dir, video_id)
         video_dir.write_source_info(info, refresh=refresh)
 
-        if _is_photo_post(url, info):
+        if _is_photo_post(fetch_url, info):
             _write_stub_metadata(video_dir, info)
             return _result(video_dir, url, STATUS_PHOTO_POST)
 
@@ -336,7 +345,7 @@ def process_video(
         caption_data: tuple[list[Cue], str | None, str] | None = None
         if whisper != "always":
             note("downloading captions")
-            caption_data = _caption_path(client, url, video_dir)
+            caption_data = _caption_path(client, fetch_url, video_dir)
 
         if caption_data is not None:
             cues, lang, source = caption_data
@@ -357,7 +366,7 @@ def process_video(
             try:
                 return _whisper_path(
                     client,
-                    url,
+                    fetch_url,
                     video_dir,
                     info,
                     model=model,
