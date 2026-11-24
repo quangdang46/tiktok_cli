@@ -21,7 +21,7 @@ fallback, built so an AI agent can read the output directly.
 <div align="center">
 
 ```bash
-uv tool install git+https://github.com/quangdang46/tiktok_cli
+curl -fsSL "https://raw.githubusercontent.com/quangdang46/tiktok_cli/main/install.sh?$(date +%s)" | bash
 ```
 
 </div>
@@ -205,7 +205,21 @@ without a database. Statuses: `caption`, `whisper`, `no-captions`, `no-audio`,
 
 ## Installation
 
-Requires Python 3.11+.
+Requires Python 3.11+. One-liner installers auto-detect `uv` → `pipx` → `pip`:
+
+```bash
+# macOS / Linux
+curl -fsSL "https://raw.githubusercontent.com/quangdang46/tiktok_cli/main/install.sh?$(date +%s)" | bash
+
+# Windows PowerShell
+irm "https://raw.githubusercontent.com/quangdang46/tiktok_cli/main/install.ps1" | iex
+```
+
+Installer flags: `--version vX.Y.Z` (pin), `--prefer uv|pipx|pip`,
+`--with-mlx` (Apple Silicon Whisper backend), `--verify`, `--uninstall`,
+`--quiet`.
+
+Manual equivalents:
 
 ```bash
 # Recommended: isolated tool install straight from git
