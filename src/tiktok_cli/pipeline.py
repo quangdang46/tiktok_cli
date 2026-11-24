@@ -352,13 +352,39 @@ def process_video(
         video_dir = VideoDir(output_dir, video_id)
         video_dir.write_source_info(info, refresh=refresh)
 
-        if _is_photo_post(fetch_url, info):
+        if _is_photo_post(url, info):
             if classify_url(url) == "photo":
                 note("downloading slideshow images")
                 try:
                     _download_images_for_photo_post(url, video_dir)
                 except Exception as exc:  # noqa: BLE001 - images are best-effort
                     note(f"warning: could not fetch slideshow images: {exc}")
+            # A photo post has no audio track, but its caption IS the content:
+            # photos and a written post. Writing metadata only left
+            # transcript.txt empty and made the post look like it had nothing to
+            # read, so every caller had to go dig in source.info.json by hand.
+            caption = str(info.get("description") or "").strip()
+            if caption:
+                cues = [
+                    Cue(
+                        start=0.0,
+                        end=0.0,
+                        start_time=captions.format_time(0.0),
+                        end_time=captions.format_time(0.0),
+                        text=caption,
+                    )
+                ]
+                transcript_txt = _render_and_write(
+                    video_dir, cues, info, fmt, STATUS_PHOTO_POST, None
+                )
+                return _result(
+                    video_dir,
+                    url,
+                    STATUS_PHOTO_POST,
+                    transcript_txt=transcript_txt,
+                    cue_count=1,
+                    transcript_source=STATUS_PHOTO_POST,
+                )
             _write_stub_metadata(video_dir, info)
             return _result(video_dir, url, STATUS_PHOTO_POST)
 
