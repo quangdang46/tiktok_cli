@@ -1,6 +1,6 @@
 [project]
 name = "tiktok-cli"
-version = "0.1.0"
+version = "0.1.1"
 description = "TikTok URL -> local transcript CLI. No login, no LLM, caption-first with Whisper fallback."
 readme = "README.md"
 requires-python = ">=3.11"
