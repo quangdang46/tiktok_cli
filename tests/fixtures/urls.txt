@@ -1,0 +1,6 @@
+# TikTok URLs to transcribe — one per line
+# Lines starting with # and blank lines are ignored.
+
+https://www.tiktok.com/@dev.daily/video/7350000000000000000
+https://www.tiktok.com/@cooking.with.mia/video/7349999999999999999
+https://vm.tiktok.com/ZM8xYk2Qp/

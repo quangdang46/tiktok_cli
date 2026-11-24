@@ -1,0 +1,28 @@
+{
+  "id": "7350000000000000000",
+  "title": "POV: your code works on the first try",
+  "uploader": "dev.daily",
+  "uploader_id": "dev.daily",
+  "duration": 14,
+  "upload_date": "20261120",
+  "webpage_url": "https://www.tiktok.com/@dev.daily/video/7350000000000000000",
+  "view_count": 128400,
+  "like_count": 9800,
+  "comment_count": 312,
+  "subtitles": {
+    "en": [
+      {
+        "ext": "vtt",
+        "url": "https://example.invalid/captions/en.vtt"
+      }
+    ]
+  },
+  "automatic_captions": {
+    "en-US": [
+      {
+        "ext": "vtt",
+        "url": "https://example.invalid/auto/en-US.vtt"
+      }
+    ]
+  }
+}
