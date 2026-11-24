@@ -377,9 +377,10 @@ def test_photo_post_cue_spans_the_post_duration(tmp_path, stub_client):
     assert payload["segments"][0]["end"] == 20
     assert payload["segments"][0]["end"] > payload["segments"][0]["start"]
     # index.jsonl must agree with metadata.json about the post
-    assert result.language == (json.loads(
-        (video_dir / "metadata.json").read_text(encoding="utf-8")
-    ).get("language") or result.language)
+    assert result.language == (
+        json.loads((video_dir / "metadata.json").read_text(encoding="utf-8")).get("language")
+        or result.language
+    )
 
 
 def test_photo_post_records_duration_and_language(tmp_path, stub_client):
@@ -431,9 +432,7 @@ def test_photo_post_metadata_keeps_the_original_url(tmp_path, stub_client):
     )
     assert meta["webpage_url"] == PHOTO_URL
     # the rewritten URL is still available for a re-fetch
-    assert meta["fetch_url"] == (
-        "https://www.tiktok.com/@dev.daily/video/7350000000000000001"
-    )
+    assert meta["fetch_url"] == ("https://www.tiktok.com/@dev.daily/video/7350000000000000001")
     assert _last_index(tmp_path)["url"] == PHOTO_URL
 
 
@@ -441,9 +440,7 @@ def test_video_metadata_url_is_not_duplicated(tmp_path, stub_client):
     """A normal video has no rewritten URL, so fetch_url stays null."""
     process_video(VIDEO_URL, tmp_path)
 
-    meta = json.loads(
-        (tmp_path / VIDEO_ID / "metadata.json").read_text(encoding="utf-8")
-    )
+    meta = json.loads((tmp_path / VIDEO_ID / "metadata.json").read_text(encoding="utf-8"))
     assert meta["webpage_url"] == VIDEO_URL
     assert meta["fetch_url"] is None
 
