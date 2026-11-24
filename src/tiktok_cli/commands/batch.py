@@ -203,9 +203,9 @@ def batch(
     summary = (
         f"batch summary: total={len(results)} ok={ok} caption={counts['caption']} "
         f"whisper={counts['whisper']} failed={counts['failed']} "
-        f"no-captions={counts['no-captions']} skipped={counts['skipped']}"
+        f"no-captions={counts['no-captions']} skipped={counts['skipped-cached']}"
     )
     _OUT.print(summary)
 
-    if results and ok == 0:
+    if ok == 0 and counts["failed"] > 0 and counts["skipped-cached"] == 0:
         raise typer.Exit(code=1)
