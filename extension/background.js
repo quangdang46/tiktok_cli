@@ -35,7 +35,7 @@ async function transcribe(buf, mimeType, settings) {
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`Groq STT failed: HTTP ${res.status} ${text.slice(0, 200)}`);
+    throw new Error(`Groq phiên âm lỗi: HTTP ${res.status} ${text.slice(0, 200)}`);
   }
   const data = await res.json();
   return data.text || (data.segments || []).map((s) => s.text).join(" ");
@@ -66,7 +66,7 @@ async function summarize(transcript, meta, settings) {
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`Gemini failed: HTTP ${res.status} ${text.slice(0, 200)}`);
+    throw new Error(`Gemini lỗi: HTTP ${res.status} ${text.slice(0, 200)}`);
   }
   const data = await res.json();
   return data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("") || "";
@@ -82,12 +82,12 @@ chrome.runtime.onConnect.addListener((port) => {
       };
       try {
         const settings = await getSettings();
-        if (!settings.groqApiKey) throw new Error("Missing Groq API key — open extension options.");
-        if (!settings.geminiApiKey) throw new Error("Missing Gemini API key — open extension options.");
+        if (!settings.groqApiKey) throw new Error("Chưa có Groq API key — mở trang Options của extension.");
+        if (!settings.geminiApiKey) throw new Error("Chưa có Gemini API key — mở trang Options của extension.");
 
         send({ stage: "transcribe" });
         const transcript = await transcribe(msg.audio, msg.mimeType, settings);
-        if (!transcript.trim()) throw new Error("Transcription empty — video likely has no speech.");
+        if (!transcript.trim()) throw new Error("Phiên âm rỗng — video có thể không có lời nói.");
 
         send({ stage: "summarize" });
         const summary = await summarize(transcript, msg.meta, settings);

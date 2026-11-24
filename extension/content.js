@@ -65,7 +65,7 @@
   panel.id = "tts-panel";
   panel.innerHTML = `
     <div class="tts-head">
-      <b>TikTok Summary</b>
+      <b>Tóm tắt TikTok</b>
       <button class="tts-close" title="Đóng">✕</button>
     </div>
     <div class="tts-body"></div>
@@ -150,7 +150,7 @@
     }
     const stream = v.captureStream ? v.captureStream() : v.mozCaptureStream?.();
     if (!stream) {
-      setBody(`<div class="tts-error">Trình duyệt không hỗ trợ captureStream.</div>`);
+      setBody(`<div class="tts-error">Trình duyệt không hỗ trợ ghi âm từ video.</div>`);
       return;
     }
     const audioTracks = stream.getAudioTracks();
@@ -166,7 +166,7 @@
         ? new MediaRecorder(audioStream, { mimeType: mime, audioBitsPerSecond: 32000 })
         : new MediaRecorder(audioStream);
     } catch (e) {
-      setBody(`<div class="tts-error">Không tạo được MediaRecorder: ${escapeHtml(e.message)}</div>`);
+      setBody(`<div class="tts-error">Không tạo được bộ ghi âm: ${escapeHtml(e.message)}</div>`);
       return;
     }
     chunks = [];
@@ -195,7 +195,7 @@
         setBody(`<div class="tts-status">${STAGE_LABELS[msg.stage] || msg.stage}…</div>`);
       } else if (msg.ok) {
         const transcriptBlock = msg.transcript
-          ? `<details><summary>Xem transcript</summary>${escapeHtml(msg.transcript)}</details>`
+          ? `<details><summary>Xem bản ghi lời (transcript)</summary>${escapeHtml(msg.transcript)}</details>`
           : "";
         setBody(
           `<div>${escapeHtml(msg.summary)}</div>${transcriptBlock}` +
@@ -203,7 +203,7 @@
         );
         state = "idle";
       } else {
-        setBody(`<div class="tts-error">${escapeHtml(msg.error || "Unknown error")}</div>`);
+        setBody(`<div class="tts-error">${escapeHtml(msg.error || "Lỗi không xác định")}</div>`);
         state = "idle";
       }
     });

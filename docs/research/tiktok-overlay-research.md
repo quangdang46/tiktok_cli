@@ -4,9 +4,11 @@ Date: 2026-11-24. Status: findings verified against primary sources where noted.
 
 ## Goal
 
-1. Chrome extension: floating bubble on tiktok.com → click → detect current
-   video → transcribe → LLM summary → show panel.
-2. Android APK (later): same UX as an overlay bubble over the TikTok app.
+Chrome extension: floating bubble on tiktok.com → tap → record current
+video's audio → transcribe → LLM summary → show panel.
+
+(Android overlay APK was researched and prototyped, then dropped by user
+decision — extension only.)
 
 Constraints decided with user: no own backend, API keys stored in-app,
 free-tier APIs only, Chrome first, extension MVP before APK.
@@ -83,7 +85,8 @@ per audio-hour and isolates failures.
 - No backend/server of our own; keys live in extension storage.
 - No feed-mode auto-summarize (only on-demand button press).
 - No iOS (no overlay API equivalent without jailbreak).
-- APK deferred until extension pipeline is proven.
+- No Android APK — cut by user decision; RQ-004 findings kept below
+  for reference if revisited.
 
 ## Open questions
 
