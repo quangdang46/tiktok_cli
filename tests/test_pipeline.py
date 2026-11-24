@@ -37,6 +37,7 @@ class StubClient:
         self.kwargs = kwargs
         self.sub_calls = 0
         self.audio_calls = 0
+        self.info_calls = 0
 
     # Behaviors are set as class attrs by the fixture below.
     info: ClassVar[dict] = INFO
@@ -46,8 +47,11 @@ class StubClient:
     audio_error: ClassVar[Exception | None] = None
     sub_calls_log: ClassVar[list[str]] = []
     audio_calls_log: ClassVar[list[str]] = []
+    info_urls_log: ClassVar[list[str]] = []
 
     def extract_info(self, url, download=False):
+        self.info_calls += 1
+        StubClient.info_urls_log.append(url)
         if self.extract_error is not None:
             raise self.extract_error
         return dict(self.info)
@@ -302,6 +306,46 @@ def test_photo_post_skipped(tmp_path, stub_client):
     video_dir = tmp_path / "7350000000000000001"
     assert (video_dir / "metadata.json").exists()
     assert not (video_dir / "transcript.json").exists()
+    assert _last_index(tmp_path)["status"] == "photo-post"
+
+
+def test_photo_post_uses_cache_on_rerun(tmp_path, stub_client):
+    """A processed photo post must short-circuit to skipped-cached.
+
+    Regression: the photo-post branch returned before the shared cache guard, so
+    re-running fetched the post again and re-downloaded every image, which made
+    `batch` over a photo-heavy list pay full cost on each run.
+    """
+    stub_client.info = {
+        **INFO,
+        "id": "7350000000000000001",
+        "webpage_url": PHOTO_URL,
+        "description": "A caption worth keeping.",
+    }
+    first = process_video(PHOTO_URL, tmp_path)
+    assert first.status == "photo-post"
+    extract_calls = len(stub_client.info_urls_log)
+
+    second = process_video(PHOTO_URL, tmp_path)
+
+    assert second.status == "skipped-cached"
+    assert second.transcript_txt == first.transcript_txt
+    # the post was not fetched again just to decide it was already done
+    assert len(stub_client.info_urls_log) == extract_calls
+    assert _last_index(tmp_path)["status"] == "skipped-cached"
+
+
+def test_photo_post_refresh_bypasses_cache(tmp_path, stub_client):
+    stub_client.info = {
+        **INFO,
+        "id": "7350000000000000001",
+        "webpage_url": PHOTO_URL,
+        "description": "A caption worth keeping.",
+    }
+    process_video(PHOTO_URL, tmp_path)
+    again = process_video(PHOTO_URL, tmp_path, refresh=True)
+
+    assert again.status == "photo-post"
     assert _last_index(tmp_path)["status"] == "photo-post"
 
 
