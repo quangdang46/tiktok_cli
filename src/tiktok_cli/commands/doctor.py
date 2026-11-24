@@ -10,6 +10,7 @@ is safe to wire into CI/scripts.
 
 from __future__ import annotations
 
+import os
 import platform
 import shutil
 import socket
@@ -101,7 +102,11 @@ def _check_mlx_whisper() -> tuple[str, str, str]:
 
 
 def _whisper_model_cache_dirs() -> list[Path]:
-    hub = Path.home() / ".cache" / "huggingface" / "hub"
+    # huggingface_hub resolves its cache from HF_HOME (default ~/.cache/huggingface);
+    # Path.home() alone misses custom HF_HOME and HOME-on-Windows cases.
+    hf_home = os.environ.get("HF_HOME")
+    base = Path(hf_home) if hf_home else Path.home() / ".cache" / "huggingface"
+    hub = base / "hub"
     return sorted(hub.glob("models--Systran--faster-whisper-*")) + sorted(
         hub.glob("models--mlx-community--whisper-*")
     )

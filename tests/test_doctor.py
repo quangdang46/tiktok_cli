@@ -56,7 +56,9 @@ def isolated_env(tmp_path, monkeypatch):
     """Hermetic doctor run: blocked imports, no binaries, no network."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("HF_HOME", str(tmp_path / "hf"))
     (tmp_path / "home").mkdir()
+    (tmp_path / "hf").mkdir()
     monkeypatch.setattr(doctor.shutil, "which", lambda name: None)
     monkeypatch.setattr(socket, "create_connection", MagicMock(side_effect=OSError("down")))
     monkeypatch.setattr(doctor.platform, "machine", lambda: "x86_64")
@@ -84,8 +86,9 @@ class TestDoctor:
     def test_all_good_exit_0(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        monkeypatch.setenv("HF_HOME", str(tmp_path / "hf"))
         (tmp_path / "home").mkdir()
-        hub = tmp_path / "home" / ".cache" / "huggingface" / "hub"
+        hub = tmp_path / "hf" / "hub"
         (hub / "models--Systran--faster-whisper-small").mkdir(parents=True)
 
         monkeypatch.setitem(sys.modules, "yt_dlp", _fake_ytdlp())
@@ -144,9 +147,10 @@ class TestDoctor:
         assert "faster-whisper" in result.output and "FAIL" in result.output
 
     def test_model_cache_detected(self, tmp_path, monkeypatch):
-        hub = tmp_path / "home" / ".cache" / "huggingface" / "hub"
+        hub = tmp_path / "hf" / "hub"
         (hub / "models--Systran--faster-whisper-small").mkdir(parents=True)
         monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        monkeypatch.setenv("HF_HOME", str(tmp_path / "hf"))
         name, status, detail = doctor._check_whisper_model()
         assert name == "whisper model"
         assert status == "INFO"
@@ -154,7 +158,9 @@ class TestDoctor:
 
     def test_model_cache_absent_warns(self, tmp_path, monkeypatch):
         (tmp_path / "home").mkdir()
+        (tmp_path / "hf").mkdir()
         monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        monkeypatch.setenv("HF_HOME", str(tmp_path / "hf"))
         _, status, detail = doctor._check_whisper_model()
         assert status == "WARN"
         assert "466MB" in detail
