@@ -81,13 +81,18 @@ def compact_metadata(
 ) -> dict[str, Any]:
     """Build the compact ``metadata.json`` payload from raw yt-dlp info.
 
-    Keys: id, title, uploader, uploader_id, duration, upload_date,
+    Keys: id, title, description, uploader, uploader_id, duration, upload_date,
     webpage_url, view_count, like_count, comment_count, transcript_source,
     cue_count, language, processed_at (UTC ISO8601).
+
+    ``description`` is the post's caption. It is the only content a photo post
+    has (no audio, no captions), and on a video it is often the real summary, so
+    dropping it forced every caller to open ``source.info.json`` by hand.
     """
     return {
         "id": info.get("id"),
         "title": info.get("title"),
+        "description": info.get("description"),
         "uploader": info.get("uploader"),
         "uploader_id": info.get("uploader_id"),
         "duration": info.get("duration"),

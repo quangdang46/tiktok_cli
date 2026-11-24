@@ -246,11 +246,55 @@ def test_refresh_bypasses_cache(tmp_path, stub_client):
     assert result.status == "caption"
 
 
+def test_photo_post_caption_becomes_the_transcript(tmp_path, stub_client):
+    """A photo post's caption is its content and must land in transcript.txt.
+
+    Regression: this path used to write metadata only, so a caption that plainly
+    held the whole post produced an empty transcript.txt and callers had to open
+    source.info.json by hand.
+    """
+    caption = "1. Two minute rule. 2. Cut the task until it is funny-small."
+    stub_client.info = {
+        **INFO,
+        "id": "7350000000000000001",
+        "webpage_url": PHOTO_URL,
+        "description": caption,
+    }
+    result = process_video(PHOTO_URL, tmp_path)
+
+    assert result.status == "photo-post"
+    video_dir = tmp_path / "7350000000000000001"
+    assert (video_dir / "transcript.txt").read_text(encoding="utf-8").strip() == caption
+    md = (video_dir / "transcript.md").read_text(encoding="utf-8")
+    assert "## Caption" in md
+    # a written caption must not get an invented timestamp
+    assert "00:00:00 -> 00:00:00" not in md
+    meta = json.loads((video_dir / "metadata.json").read_text(encoding="utf-8"))
+    assert meta["description"] == caption
+    assert meta["transcript_source"] == "photo-post"
+
+
+def test_photo_post_without_caption_still_skips_transcripts(tmp_path, stub_client):
+    stub_client.info = {
+        **INFO,
+        "id": "7350000000000000002",
+        "webpage_url": PHOTO_URL,
+        "description": "",
+    }
+    result = process_video(PHOTO_URL, tmp_path)
+
+    assert result.status == "photo-post"
+    video_dir = tmp_path / "7350000000000000002"
+    assert (video_dir / "metadata.json").exists()
+    assert not (video_dir / "transcript.json").exists()
+
+
 def test_photo_post_skipped(tmp_path, stub_client):
     stub_client.info = {
         **INFO,
         "id": "7350000000000000001",
         "webpage_url": PHOTO_URL,
+        "description": "",
     }
     result = process_video(PHOTO_URL, tmp_path)
 

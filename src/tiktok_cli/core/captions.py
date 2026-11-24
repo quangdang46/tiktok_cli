@@ -288,7 +288,12 @@ def render_json(cues: list[Cue], meta: dict[str, Any] | None = None) -> str:
 
 
 def render_md(cues: list[Cue], meta: dict[str, Any] | None = None) -> str:
-    """Markdown: `# title`, metadata bullets, then timestamped cue lines."""
+    """Markdown: `# title`, metadata bullets, then timestamped cue lines.
+
+    A ``photo-post`` source has one cue that is a written caption, not speech, so
+    it is rendered as body text: inventing a `[00:00:00 -> 00:00:00]` timestamp
+    for a post with no audio reads as a broken transcript.
+    """
     meta = meta or {}
     title = meta.get("title") or "Transcript"
     bullets = []
@@ -301,15 +306,21 @@ def render_md(cues: list[Cue], meta: dict[str, Any] | None = None) -> str:
         bullets.append(f"- Duration: {meta['duration']}s")
     if meta.get("language"):
         bullets.append(f"- Language: {meta['language']}")
+    is_caption = meta.get("transcript_source") == "photo-post"
+    if is_caption:
+        bullets.append("- Source kind: photo post, caption text (no audio)")
 
     lines = [f"# {title}", ""]
     if bullets:
         lines.extend(bullets)
         lines.append("")
-    lines.append("## Transcript")
+    lines.append("## Caption" if is_caption else "## Transcript")
     lines.append("")
     for cue in cues:
-        lines.append(f"[{cue.start_time} -> {cue.end_time}] {cue.text}")
+        if is_caption:
+            lines.append(cue.text)
+        else:
+            lines.append(f"[{cue.start_time} -> {cue.end_time}] {cue.text}")
     return _ensure_newline("\n".join(lines))
 
 
