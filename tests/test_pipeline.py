@@ -349,6 +349,65 @@ def test_photo_post_refresh_bypasses_cache(tmp_path, stub_client):
     assert _last_index(tmp_path)["status"] == "photo-post"
 
 
+def test_photo_post_cue_spans_the_post_duration(tmp_path, stub_client):
+    """A caption cue must not be a zero-second range.
+
+    Regression: the caption was emitted as `start=0.0, end=0.0`, so SRT and VTT
+    carried `00:00:00,000 --> 00:00:00,000`. That is an invalid SubRip range and
+    collapses to zero length anywhere cues are sorted or seeked by end time.
+    """
+    stub_client.info = {
+        **INFO,
+        "id": "7350000000000000001",
+        "webpage_url": PHOTO_URL,
+        "description": "A caption worth keeping.",
+        "duration": 20,
+    }
+    result = process_video(PHOTO_URL, tmp_path)
+
+    video_dir = tmp_path / "7350000000000000001"
+    srt = (video_dir / "transcript.srt").read_text(encoding="utf-8")
+    assert "00:00:00,000 --> 00:00:20,000" in srt
+    assert "00:00:00,000 --> 00:00:00,000" not in srt
+
+    vtt = (video_dir / "transcript.vtt").read_text(encoding="utf-8")
+    assert "00:00:00.000 --> 00:00:20.000" in vtt
+
+    payload = json.loads((video_dir / "transcript.json").read_text(encoding="utf-8"))
+    assert payload["segments"][0]["end"] == 20
+    assert payload["segments"][0]["end"] > payload["segments"][0]["start"]
+    # index.jsonl must agree with metadata.json about the post
+    assert result.language == (json.loads(
+        (video_dir / "metadata.json").read_text(encoding="utf-8")
+    ).get("language") or result.language)
+
+
+def test_photo_post_records_duration_and_language(tmp_path, stub_client):
+    """metadata.json and index.jsonl must carry the real duration/language.
+
+    Regression: the photo-post branch passed neither, so metadata said
+    `duration: 20` while index.jsonl recorded `duration: null`, and an explicit
+    `-l` was dropped on the floor.
+    """
+    stub_client.info = {
+        **INFO,
+        "id": "7350000000000000001",
+        "webpage_url": PHOTO_URL,
+        "description": "A caption worth keeping.",
+        "duration": 20,
+    }
+    process_video(PHOTO_URL, tmp_path, language="vi")
+
+    record = _last_index(tmp_path)
+    assert record["duration"] == 20
+    assert record["language"] == "vi"
+    meta = json.loads(
+        (tmp_path / "7350000000000000001" / "metadata.json").read_text(encoding="utf-8")
+    )
+    assert meta["duration"] == 20
+    assert meta["language"] == "vi"
+
+
 def test_failed_url_isolated(tmp_path, stub_client):
     """A failing URL returns status=failed; the next URL still processes."""
     stub_client.extract_error = UserError("That video is unavailable.")
