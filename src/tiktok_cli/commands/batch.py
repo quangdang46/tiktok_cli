@@ -20,6 +20,13 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from tiktok_cli.core.artifacts import (
+    ALL_STATUSES,
+    STATUS_FAILED,
+    STATUS_SKIPPED_CACHED,
+    SUCCESS_STATUSES,
+    count_is_consistent,
+)
 from tiktok_cli.core.errors import UserError
 
 _OUT = Console()
@@ -199,13 +206,20 @@ def batch(
     _ERR.print(table)
 
     counts = Counter(r.status for r in results)
-    ok = counts["ok"] + counts["caption"] + counts["whisper"]
-    summary = (
-        f"batch summary: total={len(results)} ok={ok} caption={counts['caption']} "
-        f"whisper={counts['whisper']} failed={counts['failed']} "
-        f"no-captions={counts['no-captions']} skipped={counts['skipped-cached']}"
+    ok = sum(counts[status] for status in SUCCESS_STATUSES)
+    # Built from ALL_STATUSES rather than a hand-written string so every bucket is
+    # printed and the numbers add up to total; a missing status used to vanish.
+    summary = "batch summary: total={} ok={} {}".format(
+        len(results),
+        ok,
+        " ".join(f"{status}={counts[status]}" for status in ALL_STATUSES),
     )
     _OUT.print(summary)
+    if not count_is_consistent(dict(counts), len(results)):
+        _ERR.print(
+            f"[yellow]warning: status counts sum to {sum(counts.values())}, "
+            f"expected {len(results)}[/yellow]"
+        )
 
-    if ok == 0 and counts["failed"] > 0 and counts["skipped-cached"] == 0:
+    if ok == 0 and counts[STATUS_FAILED] > 0 and counts[STATUS_SKIPPED_CACHED] == 0:
         raise typer.Exit(code=1)

@@ -91,6 +91,53 @@ class TestBatchCommand:
         assert "batch summary: total=2 ok=2 caption=2" in result.output
         assert "transcript.txt" in result.output
 
+    def test_photo_post_counts_as_success(self, tmp_path, monkeypatch):
+        """A transcribed photo post is a success, not a failure.
+
+        Regression: `ok` summed a hand-written list of statuses that omitted
+        `photo-post`, so a batch of one photo post plus one bad URL reported
+        ok=0 and exited 1 even though the photo post wrote a transcript.
+        """
+        statuses = iter(["photo-post", "failed"])
+        _install_fake_pipeline(
+            monkeypatch, lambda u, o, **k: _result(u, status=next(statuses))
+        )
+        urls = _write_urls(tmp_path, "https://a\nhttps://b\n")
+        result = runner.invoke(app, [str(urls), "-o", str(tmp_path / "out")])
+
+        assert "ok=1" in result.output
+        # every status is reported, so the buckets add up to the total
+        assert "total=2" in result.output
+        assert "photo-post=1" in result.output
+        assert "failed=1" in result.output
+        assert result.exit_code == 0, result.output
+
+    def test_summary_buckets_sum_to_total(self, tmp_path, monkeypatch):
+        """No status may drop out of the summary.
+
+        The summary used to be a hand-written f-string; any status missing from
+        it vanished from the output and from `ok`.
+        """
+        statuses = iter(["photo-post", "no-audio", "skipped-cached"])
+        _install_fake_pipeline(
+            monkeypatch, lambda u, o, **k: _result(u, status=next(statuses))
+        )
+        urls = _write_urls(tmp_path, "https://a\nhttps://b\nhttps://c\n")
+        result = runner.invoke(app, [str(urls), "-o", str(tmp_path / "out")])
+
+        assert result.exit_code == 0, result.output
+        # rich wraps the summary across lines at console width, so join the
+        # whole output before parsing rather than assuming one line.
+        flat = " ".join(result.output.split())
+        summary = flat[flat.index("batch summary") :]
+        total = int(summary.split("total=")[1].split()[0])
+        buckets = {
+            part.split("=")[0]: int(part.split("=")[1])
+            for part in summary.split()
+            if "=" in part and not part.startswith(("total=", "ok="))
+        }
+        assert sum(buckets.values()) == total, summary
+
     def test_flags_forwarded(self, tmp_path, monkeypatch):
         calls = _install_fake_pipeline(monkeypatch, lambda u, o, **k: _result(u))
         urls = _write_urls(tmp_path, "https://a\n")
