@@ -408,6 +408,46 @@ def test_photo_post_records_duration_and_language(tmp_path, stub_client):
     assert meta["language"] == "vi"
 
 
+def test_photo_post_metadata_keeps_the_original_url(tmp_path, stub_client):
+    """metadata.json must record the /photo/ URL the caller used.
+
+    Regression: yt-dlp's info carries the rewritten /video/ URL (photo posts are
+    fetched through it), and compact_metadata copied it verbatim. Feeding that
+    URL back in re-classified the post as a video, transcribed non-existent
+    audio, and lost the caption and the images.
+    """
+    stub_client.info = {
+        **INFO,
+        "id": "7350000000000000001",
+        # yt-dlp hands back the fetch form
+        "webpage_url": "https://www.tiktok.com/@dev.daily/video/7350000000000000001",
+        "description": "A caption worth keeping.",
+        "duration": 20,
+    }
+    process_video(PHOTO_URL, tmp_path)
+
+    meta = json.loads(
+        (tmp_path / "7350000000000000001" / "metadata.json").read_text(encoding="utf-8")
+    )
+    assert meta["webpage_url"] == PHOTO_URL
+    # the rewritten URL is still available for a re-fetch
+    assert meta["fetch_url"] == (
+        "https://www.tiktok.com/@dev.daily/video/7350000000000000001"
+    )
+    assert _last_index(tmp_path)["url"] == PHOTO_URL
+
+
+def test_video_metadata_url_is_not_duplicated(tmp_path, stub_client):
+    """A normal video has no rewritten URL, so fetch_url stays null."""
+    process_video(VIDEO_URL, tmp_path)
+
+    meta = json.loads(
+        (tmp_path / VIDEO_ID / "metadata.json").read_text(encoding="utf-8")
+    )
+    assert meta["webpage_url"] == VIDEO_URL
+    assert meta["fetch_url"] is None
+
+
 def test_failed_url_isolated(tmp_path, stub_client):
     """A failing URL returns status=failed; the next URL still processes."""
     stub_client.extract_error = UserError("That video is unavailable.")
