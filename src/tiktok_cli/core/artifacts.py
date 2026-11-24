@@ -41,6 +41,38 @@ STATUS_PHOTO_POST = "photo-post"
 STATUS_FAILED = "failed"
 STATUS_SKIPPED_CACHED = "skipped-cached"
 
+# Every status above, in display order. Reporters must iterate this instead of
+# hand-writing a format string, or a new status silently drops out of summaries
+# and the per-status counts stop adding up to the total.
+ALL_STATUSES = (
+    STATUS_CAPTION,
+    STATUS_WHISPER,
+    STATUS_PHOTO_POST,
+    STATUS_NO_CAPTIONS,
+    STATUS_NO_AUDIO,
+    STATUS_FAILED,
+    STATUS_SKIPPED_CACHED,
+)
+
+# Statuses that produced something the caller asked for. Kept as a set so
+# "success" is derived from the vocabulary rather than enumerated at each call
+# site, which is how photo-post came to be counted as a failure in batch.
+SUCCESS_STATUSES = frozenset(
+    {
+        STATUS_CAPTION,
+        STATUS_WHISPER,
+        STATUS_PHOTO_POST,
+        STATUS_NO_CAPTIONS,  # documented as a legitimate outcome, not an error
+        STATUS_NO_AUDIO,
+        STATUS_SKIPPED_CACHED,
+    }
+)
+
+
+def count_is_consistent(counts: dict[str, int], total: int) -> bool:
+    """True when every processed URL landed in exactly one known status bucket."""
+    return sum(counts.values()) == total and not (set(counts) - set(ALL_STATUSES))
+
 _INDEX_FILENAME = "index.jsonl"
 
 
