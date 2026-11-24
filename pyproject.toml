@@ -11,6 +11,9 @@ dependencies = [
     "yt-dlp>=2025.1",
     "faster-whisper>=1.1",
     "ctranslate2>=4.6.3",
+    "huggingface-hub>=0.21,<1.0",
+    "curl-cffi>=0.7",
+    "av>=15,<17",
 ]
 
 [project.optional-dependencies]

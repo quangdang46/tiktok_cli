@@ -207,7 +207,10 @@ class YtdlpClient:
         )
         try:
             with yt_dlp.YoutubeDL(opts) as ydl:
-                ydl.extract_info(url, download=False)
+                # download=True is required: with download=False yt-dlp only
+                # extracts metadata and never writes subtitle files, even
+                # though skip_download suppresses the A/V download itself.
+                ydl.extract_info(url, download=True)
         except Exception as exc:
             raise translate_download_error(exc) from exc
         # Whatever yt-dlp wrote is the truth; return every .vtt, sorted.
@@ -253,7 +256,7 @@ class YtdlpClient:
             )
             try:
                 with yt_dlp.YoutubeDL(opts) as ydl:
-                    info = ydl.extract_info(url, download=False) or {}
+                    info = ydl.extract_info(url, download=True) or {}
             except Exception as exc:
                 raise translate_download_error(exc) from exc
             video_id = info.get("id")
