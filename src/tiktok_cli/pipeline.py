@@ -345,6 +345,24 @@ def process_video(
     # but the same id resolves under /video/ and carries an audio track.
     fetch_url = photo_to_video_url(url)
 
+    # Cache check before any network call. `is_processed()` only needs the id, and
+    # fetching the post just to learn what we already have is the difference
+    # between a free re-run and a full one.
+    if not refresh:
+        cached_id = video_id_from_url(url)
+        if cached_id:
+            cached_dir = VideoDir(output_dir, cached_id)
+            if cached_dir.is_processed():
+                # Return the transcript path, not None: callers print it on stdout
+                # and read it, so a cached hit must be as usable as a fresh run.
+                cached_txt = cached_dir.transcript_path("txt")
+                return _result(
+                    cached_dir,
+                    url,
+                    STATUS_SKIPPED_CACHED,
+                    transcript_txt=cached_txt if cached_txt.exists() else None,
+                )
+
     try:
         note("fetching video info")
         info = client.extract_info(fetch_url) or {}
@@ -353,6 +371,12 @@ def process_video(
         video_dir.write_source_info(info, refresh=refresh)
 
         if _is_photo_post(url, info):
+            # Cache guard first: this branch returns early, so the shared guard
+            # further down never ran and a completed photo post re-fetched and
+            # re-downloaded its images on every invocation, against the
+            # documented "re-run is free" behaviour.
+            if video_dir.is_processed() and not refresh:
+                return _result(video_dir, url, STATUS_SKIPPED_CACHED)
             if classify_url(url) == "photo":
                 note("downloading slideshow images")
                 try:
