@@ -169,7 +169,10 @@ tiktok-transcripts/                  # --output-dir
 │   ├── transcript.srt
 │   ├── transcript.txt               # plain text, no timestamps — what agents read
 │   ├── transcript.json              # [{start, end, text}]
-│   └── transcript.md                # # title + metadata + [mm:ss] cues
+│   ├── transcript.md                # # title + metadata + [mm:ss] cues
+│   ├── images/                      # photo posts only: slideshow images
+│   │   └── image_01.jpg ...
+│   └── images.json                  # photo posts only: image manifest
 └── index.jsonl                      # append-only log of every processed video
 ```
 
@@ -190,9 +193,10 @@ tiktok-transcripts/                  # --output-dir
 - **No captions + `--whisper never`** produces `no-captions`: metadata and
   an index entry, but no transcript files.
 - **Photo/slideshow posts** (`/photo/` URLs): yt-dlp cannot read `/photo/`
-  URLs, so the CLI rewrites them to the equivalent `/video/` form and
-  transcribes the post's audio track (music/speech). The slideshow images
-  themselves are not downloaded — they live behind TikTok's signed API.
+  URLs, so the CLI rewrites them to the equivalent `/video/` form — the
+  post's audio track is transcribed as usual — and additionally downloads
+  the slideshow images into `VIDEO_ID/images/` plus an `images.json`
+  manifest, by solving TikTok's public JS challenge on the post page.
 - **No LLM features.** This CLI extracts transcripts only; summarization,
   chaptering, and analysis are the caller's job.
 

@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from tiktok_cli.core import captions, stt
+from tiktok_cli.core import captions, post_page, stt
 from tiktok_cli.core.artifacts import (
     STATUS_CAPTION,
     STATUS_FAILED,
@@ -282,6 +282,23 @@ def _whisper_path(
     )
 
 
+def _download_images_for_photo_post(url: str, video_dir: VideoDir) -> int:
+    """Best-effort slideshow image download for ``/photo/`` posts.
+
+    Fetches ``itemStruct`` from the public post page (JS-challenge solved),
+    downloads ``imagePost.images`` into ``VIDEO_ID/images/`` and writes
+    ``images.json``. Returns the number of images saved; raises on hard
+    failures (caller treats as best-effort).
+    """
+    item = post_page.fetch_item_struct(photo_to_video_url(url))
+    if not item:
+        return 0
+    files = post_page.download_post_images(item, video_dir.path / "images")
+    if files:
+        post_page.write_images_manifest(video_dir.path, item, files)
+    return len(files)
+
+
 def process_video(
     url: str,
     output_dir: Path | str,
@@ -336,11 +353,24 @@ def process_video(
         video_dir.write_source_info(info, refresh=refresh)
 
         if _is_photo_post(fetch_url, info):
+            if classify_url(url) == "photo":
+                note("downloading slideshow images")
+                try:
+                    _download_images_for_photo_post(url, video_dir)
+                except Exception as exc:  # noqa: BLE001 - images are best-effort
+                    note(f"warning: could not fetch slideshow images: {exc}")
             _write_stub_metadata(video_dir, info)
             return _result(video_dir, url, STATUS_PHOTO_POST)
 
         if video_dir.is_processed() and not refresh:
             return _result(video_dir, url, STATUS_SKIPPED_CACHED)
+
+        if classify_url(url) == "photo":
+            note("downloading slideshow images")
+            try:
+                _download_images_for_photo_post(url, video_dir)
+            except Exception as exc:  # noqa: BLE001 - images are best-effort
+                note(f"warning: could not fetch slideshow images: {exc}")
 
         caption_data: tuple[list[Cue], str | None, str] | None = None
         if whisper != "always":
