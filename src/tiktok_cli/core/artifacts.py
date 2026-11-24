@@ -110,21 +110,30 @@ def compact_metadata(
     transcript_source: str,
     cue_count: int,
     language: str | None = None,
+    *,
+    source_url: str | None = None,
 ) -> dict[str, Any]:
     """Build the compact ``metadata.json`` payload from raw yt-dlp info.
 
     Keys: id, title, description, uploader, uploader_id, duration, upload_date,
-    webpage_url, view_count, like_count, comment_count, transcript_source,
-    cue_count, language, processed_at (UTC ISO8601).
+    webpage_url, fetch_url, view_count, like_count, comment_count,
+    transcript_source, cue_count, language, processed_at (UTC ISO8601).
 
     ``description`` is the post's caption. It is the only content a photo post
     has (no audio, no captions), and on a video it is often the real summary, so
     dropping it forced every caller to open ``source.info.json`` by hand.
 
+    ``source_url`` is the URL the caller actually used. It wins over yt-dlp's
+    ``webpage_url`` because photo posts are fetched through a rewritten
+    ``/video/`` URL: persisting that one made re-processing from metadata
+    mis-classify the post as a video and lose its caption. The rewritten URL is
+    kept as ``fetch_url`` so a re-fetch still works.
+
     ``language`` falls back to yt-dlp's own tag when neither the caller nor the
     caption filename provided one, so an explicit ``-l`` and a detected tag are
     both preferred over a bare ``null``.
     """
+    webpage_url = info.get("webpage_url")
     return {
         "id": info.get("id"),
         "title": info.get("title"),
@@ -133,7 +142,8 @@ def compact_metadata(
         "uploader_id": info.get("uploader_id"),
         "duration": info.get("duration"),
         "upload_date": _format_upload_date(info.get("upload_date")),
-        "webpage_url": info.get("webpage_url"),
+        "webpage_url": source_url or webpage_url,
+        "fetch_url": webpage_url if source_url and source_url != webpage_url else None,
         "view_count": info.get("view_count"),
         "like_count": info.get("like_count"),
         "comment_count": info.get("comment_count"),

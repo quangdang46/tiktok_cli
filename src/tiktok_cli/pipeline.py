@@ -170,9 +170,12 @@ def _render_and_write(
     fmt: str,
     transcript_source: str,
     language: str | None,
+    source_url: str | None = None,
 ) -> Path | None:
     """Render transcripts + metadata.json; return the transcript.txt path."""
-    meta = compact_metadata(info, transcript_source, len(cues), language)
+    meta = compact_metadata(
+        info, transcript_source, len(cues), language, source_url=source_url
+    )
     rendered = captions.render_all(cues, meta, fmt)
     if isinstance(rendered, str):
         rendered = {fmt: rendered}
@@ -220,10 +223,15 @@ def _result(
 
 
 def _write_stub_metadata(
-    video_dir: VideoDir, info: dict[str, Any], transcript_source: str = "none"
+    video_dir: VideoDir,
+    info: dict[str, Any],
+    transcript_source: str = "none",
+    source_url: str | None = None,
 ) -> None:
     """metadata.json only (no transcripts) for skip/failure statuses."""
-    video_dir.write_metadata(compact_metadata(info, transcript_source, 0, None))
+    video_dir.write_metadata(
+        compact_metadata(info, transcript_source, 0, None, source_url=source_url)
+    )
 
 
 def _caption_path(
@@ -254,6 +262,7 @@ def _whisper_path(
     engine: Any,
     fmt: str,
     keep_audio: bool,
+    source_url: str | None = None,
 ) -> VideoResult:
     """Download audio, transcribe, render. Raises; caller maps to failed/no-audio."""
     video_dir.ensure()
@@ -269,7 +278,9 @@ def _whisper_path(
         engine if isinstance(engine, str) else getattr(engine, "name", "custom")
     )
     source = f"whisper:{engine_name}:{stt_result.model or model}:{lang or 'auto'}"
-    transcript_txt = _render_and_write(video_dir, cues, info, fmt, source, lang)
+    transcript_txt = _render_and_write(
+        video_dir, cues, info, fmt, source, lang, source_url=source_url or url
+    )
     return _result(
         video_dir,
         url,
@@ -404,7 +415,13 @@ def process_video(
                     )
                 ]
                 transcript_txt = _render_and_write(
-                    video_dir, cues, info, fmt, STATUS_PHOTO_POST, language
+                    video_dir,
+                    cues,
+                    info,
+                    fmt,
+                    STATUS_PHOTO_POST,
+                    language,
+                    source_url=url,
                 )
                 return _result(
                     video_dir,
@@ -416,7 +433,7 @@ def process_video(
                     duration=info.get("duration"),
                     transcript_source=STATUS_PHOTO_POST,
                 )
-            _write_stub_metadata(video_dir, info)
+            _write_stub_metadata(video_dir, info, source_url=url)
             return _result(video_dir, url, STATUS_PHOTO_POST)
 
         if video_dir.is_processed() and not refresh:
@@ -436,7 +453,9 @@ def process_video(
 
         if caption_data is not None:
             cues, lang, source = caption_data
-            transcript_txt = _render_and_write(video_dir, cues, info, fmt, source, lang)
+            transcript_txt = _render_and_write(
+                video_dir, cues, info, fmt, source, lang, source_url=url
+            )
             return _result(
                 video_dir,
                 url,
@@ -461,22 +480,23 @@ def process_video(
                     engine=engine,
                     fmt=fmt,
                     keep_audio=keep_audio,
+                    source_url=url,
                 )
             except Exception as exc:
                 if _is_no_audio_error(exc):
-                    _write_stub_metadata(video_dir, info)
+                    _write_stub_metadata(video_dir, info, source_url=url)
                     return _result(video_dir, url, STATUS_NO_AUDIO, error=str(exc))
                 raise
 
         # Captions wanted but none exist and whisper is disabled.
-        _write_stub_metadata(video_dir, info)
+        _write_stub_metadata(video_dir, info, source_url=url)
         return _result(video_dir, url, STATUS_NO_CAPTIONS)
 
     except Exception as exc:  # noqa: BLE001 - per-video isolation for batch
         error = str(exc)
         if video_dir is not None:
             try:
-                _write_stub_metadata(video_dir, info)
+                _write_stub_metadata(video_dir, info, source_url=url)
             except Exception as meta_exc:  # noqa: BLE001 - metadata is best-effort
                 note(f"warning: could not write metadata.json: {meta_exc}")
             return _result(video_dir, url, STATUS_FAILED, error=error)
