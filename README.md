@@ -17,7 +17,7 @@
 Một lệnh biến bất kỳ video hoặc bài ảnh công khai nào trên TikTok thành
 `transcript.txt`, `.srt`, `.vtt`, `.json` và `.md` kèm metadata — ưu tiên
 phụ đề có sẵn, Whisper làm phương án dự phòng, thiết kế để AI agent đọc
-kết quả trực tiếp.
+kết quả trực tiếp mà không cần qua website trung gian.
 
 <div align="center">
 
@@ -33,12 +33,14 @@ curl -fsSL "https://raw.githubusercontent.com/quangdang46/tiktok_cli/main/instal
 
 Được xây dựng cho agent (Claude Code, Codex, Devin, script). Quy ước:
 
-- **stdout chỉ chứa kết quả** — mỗi video một dòng
-  `VIDEO_ID | nguồn | cues=N | thư mục`, hoặc dữ liệu kiểu `--json`.
-- **stderr chứa toàn bộ chẩn đoán** — progress bar, cảnh báo, log yt-dlp.
-  An toàn để pipe stdout.
-- **exit 0 = mọi URL thành công**; khác 0 nếu có URL lỗi (batch cô lập
-  lỗi từng video và vẫn exit 0 khi chỉ lỗi một phần).
+- **stdout chỉ chứa kết quả** — `transcript` in mỗi video một dòng
+  `VIDEO_ID | nguồn | cues=N | thư mục`; `batch` in đường dẫn
+  `transcript.txt` từng video + một dòng summary cuối. `--json` không có
+  vì artifact `.json` đã là output máy đọc được.
+- **stderr chứa toàn bộ chẩn đoán** — progress bar, cảnh báo, log yt-dlp,
+  bảng tổng kết batch. An toàn để pipe stdout.
+- **exit 0 = mọi URL thành công**; `transcript` exit 1 nếu có URL lỗi,
+  `batch` chỉ exit 1 khi *không gì* thành công và có ít nhất một URL lỗi.
 
 ```bash
 # 1. Phiên âm — ghi vào ./tiktok-transcripts/VIDEO_ID/
@@ -53,7 +55,7 @@ tiktok-transcripts/VIDEO_ID/transcript.md
 # 4. Danh sách cue dạng máy đọc được
 tiktok-transcripts/VIDEO_ID/transcript.json   # [{start, end, text}]
 
-# 5. Chạy hàng loạt từ file URL
+# 5. Chạy hàng loạt từ file URL (stdout = đường dẫn transcript.txt)
 tiktok batch urls.txt
 
 # 6. Kiểm tra sức khỏe trước khi chạy lớn
@@ -72,10 +74,10 @@ tiktok doctor
 
 - Thấy video TikTok đáng xem nhưng ngại xem hết 3 phút.
 - Các trang transcript yêu cầu login, phải upload link cho bên thứ ba,
-  hoặc khóa paywall/khoá bản quyền kết quả.
-- Tự lắp yt-dlp + ffmpeg + Whisper cho từng video nghĩa là phải xử lý
-  lại lỗi phụ đề, parse VTT, cấu hình chống hallucination và định dạng
-  đầu ra mỗi lần.
+  hoặc khoá paywall/kết quả.
+- Tự lắp yt-dlp + ffmpeg + Whisper cho từng video nghĩa là phải xử lý lại
+  lỗi phụ đề, parse VTT, cấu hình chống hallucination và định dạng đầu ra
+  mỗi lần.
 
 ### Giải pháp
 
@@ -92,6 +94,17 @@ tiktok doctor
 Bài ảnh/slideshow (`/photo/`) được phiên âm **audio** **và** tải ảnh —
 CLI tự giải JS challenge công khai của TikTok để đọc dữ liệu `imagePost`
 mà yt-dlp không thấy.
+
+### Vì sao không tự lắp yt-dlp + Whisper?
+
+- Phụ đề TikTok trả về là file `.vtt` thô — phải tự parse timestamp, gộp
+  cue, chọn ngôn ngữ, rồi mới có transcript sạch.
+- Whisper mặc định hallucinate trên đoạn nhạc/im lặng — cần VAD filter và
+  tham số `condition_on_previous_text=False` mà ít ai nhớ set.
+- Photo post `/photo/` bị extractor yt-dlp từ chối hoàn toàn; phải tự
+  rewrite URL và giải challenge phía client.
+- Batch + cache + index phải tự viết — tiktok-cli cho sẵn và idempotent
+  mặc định.
 
 ### Vì sao chọn tiktok-cli?
 
@@ -128,7 +141,8 @@ tiktok transcript "https://www.tiktok.com/@user/photo/7707892619572972813"
 
 # Batch từ file (# được phép comment)
 tiktok batch urls.txt
-# → kết quả từng video + bảng tổng kết; một URL lỗi không làm chết cả run
+# → đường dẫn transcript.txt từng video + bảng tổng kết trên stderr;
+#   một URL lỗi không làm chết cả run
 
 # Chạy lại miễn phí — URL đã xử lý sẽ skip ngay
 tiktok transcript <url>          # → skipped-cached
@@ -145,7 +159,7 @@ tiktok transcript <url> --cookies-from-browser chrome
 | Lệnh | Mô tả | Flag chính |
 |------|-------|-----------|
 | `tiktok transcript <urls...>` | Phiên âm một hoặc nhiều video (ưu tiên phụ đề, Whisper dự phòng). | `-o/--output-dir`, `--whisper auto\|always\|never`, `--engine auto\|faster\|mlx`, `-m/--model`, `--format txt\|srt\|vtt\|json\|md\|all`, `--keep-audio`, `--refresh`, `--cookies-from-browser`, `--cookies`, `-v` |
-| `tiktok batch <file>` | Xử lý danh sách URL, mỗi dòng một URL (cho phép `#` comment); lỗi từng video không dừng cả run. | cùng bộ flag pipeline như `transcript` |
+| `tiktok batch <file>` | Xử lý danh sách URL, mỗi dòng một URL (cho phép `#` comment, tự dedupe); lỗi từng video không dừng cả run. | cùng bộ flag pipeline như `transcript` |
 | `tiktok doctor` | Kiểm tra yt-dlp, ffmpeg, faster-whisper, mlx-whisper, model đã cache, `tt`, mạng, thư mục output. Exit 1 nếu thiếu dep cốt lõi. | — |
 
 > Các lệnh khám phá (`info`, `search`, `list`, `tag`, `trending`,
@@ -218,8 +232,8 @@ irm "https://raw.githubusercontent.com/quangdang46/tiktok_cli/main/install.ps1" 
 ```
 
 Flag của installer: `--version vX.Y.Z` (ghim bản), `--prefer uv|pipx|pip`,
-`--with-mlx` (backend Whisper Apple Silicon), `--verify`, `--uninstall`,
-`--quiet`.
+`--with-mlx` (backend Whisper Apple Silicon), `--verify` (chạy
+`tiktok --help` sau cài), `--uninstall`, `--quiet`.
 
 Cách thủ công tương đương:
 
@@ -341,7 +355,7 @@ Sớm muộn cũng có — đây là scraping. yt-dlp được maintain tích c�
 
 ```bash
 uv sync                     # cài deps + dev extras vào .venv
-uv run pytest               # 265 test, không mạng, không tải model
+uv run pytest               # test suite, không mạng, không tải model
 uv run ruff check .         # lint
 uv run ruff format .        # format
 uv run tiktok transcript <url>   # chạy CLI từ source
