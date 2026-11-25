@@ -120,7 +120,9 @@ read `imagePost` data that yt-dlp can't see.
 | Batch + idempotent index | ✅ `index.jsonl` | ❌ | ⚠️ session cache | ⚠️ |
 | Agent contract (stdout/stderr) | ✅ | ❌ | ⚠️ | ❌ |
 | No login required | ✅ | ✅ | ✅ | ✅ |
-| Discovery (search/trending) | ⏸️ suspended | ❌ | ❌ | ⚠️ WAF-blocked |
+| Video info / user posts / profile | ✅ `info` `list` `user` | ⚠️ assemble it | ❌ | ⚠️ WAF-blocked |
+| Download video/photo posts | ✅ `download` | ✅ | ❌ | ✅ media only |
+| Discovery (search/trending/tag) | ⛔ WAF-blocked | ❌ | ❌ | ⚠️ WAF-blocked |
 
 ---
 
@@ -152,6 +154,11 @@ tiktok transcript <url> --refresh  # force redo
 
 # Cookies when TikTok is picky (optional, not required)
 tiktok transcript <url> --cookies-from-browser chrome
+
+# Metadata / profile / media — no Whisper involved
+tiktok info <url> --json
+tiktok user @handle
+tiktok download <url> -o ./videos
 ```
 
 ---
@@ -162,10 +169,15 @@ tiktok transcript <url> --cookies-from-browser chrome
 |---------|-------------|-----------|
 | `tiktok transcript <urls...>` | Transcribe one or more videos (captions first, Whisper fallback). | `-o/--output-dir`, `--whisper auto\|always\|never`, `--engine auto\|faster\|mlx`, `-m/--model`, `--format txt\|srt\|vtt\|json\|md\|all`, `--keep-audio`, `--refresh`, `--cookies-from-browser`, `--cookies`, `-v` |
 | `tiktok batch <file>` | Process a URL list, one URL per line (`#` comments allowed, auto-deduped); per-video errors don't stop the run. | same pipeline flags as `transcript` |
+| `tiktok info <url>` | Video metadata — plays/likes/comments/shares/favorites, music, hashtags, duration. SSR page blob first, yt-dlp fallback; no download. | `--json`, `--cookies-from-browser`, `--cookies` |
+| `tiktok list <handle>` | A user's public videos (flat playlist, no per-video fetch). | `-n/--limit`, `--json`, `--cookies-from-browser`, `--cookies` |
+| `tiktok user <handle>` | Public profile stats — followers/following/hearts/videos, bio, verified/private. | `--json` |
+| `tiktok download <urls...>` | Save videos as mp4 (`<author>-<id>.<ext>`) and photo posts as images + `images.json`. Skips existing unless `--refresh`. | `-o/--output-dir`, `--refresh`, `--cookies-from-browser`, `--cookies` |
 | `tiktok doctor` | Checks yt-dlp, ffmpeg, faster-whisper, mlx-whisper, cached models, `tt`, network, output dir. Exit 1 on missing core deps. | — |
 
-> Discovery commands (`info`, `search`, `list`, `tag`, `trending`,
-> `discover`) are currently **suspended** — see Limitations.
+> `search`, `tag`, `trending`, `discover` stay **suspended** — they need
+> TikTok's signed API plane, which is WAF-blocked for most IPs. See
+> Limitations.
 
 `tiktok transcript` and `batch` share the same options:
 
@@ -301,12 +313,13 @@ the audio transcript still succeeds and a warning goes to stderr.
   TikTok extractor; when TikTok breaks it, upgrade yt-dlp
   (`uv tool install --force ...`) and re-run `tiktok doctor` to check
   the version.
-- **Discovery commands are suspended.** `info`, `search`, `list`, `tag`,
-  `trending`, `discover` depend on the external `tt` binary and TikTok web
-  endpoints behind aggressive anti-bot/WAF — most IPs get challenged even
-  on the more resilient read paths, so the commands were removed from the
-  CLI. `transcript`/`batch`/`doctor` are unaffected. Code and tests remain
-  in the repo to re-enable when needed.
+- **Graph discovery is unavailable without login.** `search`, `tag`,
+  `trending`, `discover` depend on TikTok's signed API plane
+  (`/api/search/...`, recommend feed), which serves a WAF challenge to
+  most datacenter/residential IPs — verified 2026-11. What *does* work
+  anonymously: post pages and profile pages (SSR hydration blob, which
+  `info`/`list`/`user`/`download`/`transcript` use) and yt-dlp's
+  extractor. `tt`-backed code and tests remain in the repo.
 - **No captions + `--whisper never`** yields `no-captions`: metadata and
   an index entry exist, but no transcript file.
 - **Slideshow images are best-effort.** Depends on TikTok's public JS

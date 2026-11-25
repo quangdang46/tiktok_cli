@@ -378,3 +378,30 @@ Không torch, không openai-whisper, không pydub — gọn như omni-transcribe
 2. **Audio**: xoá sau khi transcribe; `--keep-audio` opt-in.
 3. **Thư mục output**: `./tiktok-transcripts` tương đối cwd; override bằng `-o`.
 4. **Khám phá**: build **tất cả** — `info`, `list`, `search`, `tag`, `trending`, `discover` qua binary `tt` trong v1 (vẫn là dep tuỳ chọn, degrade nhẹ nhàng khi thiếu `tt`).
+
+---
+
+## 12. Cập nhật nghiên cứu no-login (2026-11-25, verify trực tiếp)
+
+Kết quả probe thực tế trên máy dev — ma trận tính năng TikTok **không login**:
+
+| Tính năng | Đường đi | Trạng thái |
+|-----------|----------|-----------|
+| transcript / batch / doctor | yt-dlp + captions/Whisper | ✅ hoạt động |
+| `info <url>` | SSR `itemStruct` (statsV2, music, challenges) → fallback yt-dlp | ✅ PR #14 |
+| `list @user` | yt-dlp `TikTokUserIE` flat-playlist | ✅ PR #14 |
+| `user @handle` | SSR `webapp.user-detail.userInfo` (follower/following/heart/video) | ✅ PR #13 |
+| `download <url>` | yt-dlp mp4; photo post → `imagePost.images` qua SSR | ✅ PR #15 |
+| oEmbed `tiktok.com/oembed` | public, không cần login | khả dụng (chưa cần) |
+| `tt video <id>` | SSR plane của tt | ⚠️ chập chờn WAF |
+| `tt search/user/posts/hashtag/sound/trending/comments` | signed API plane | ❌ WAF challenge |
+| yt-dlp `TikTokTagIE`/`TikTokSoundIE` | cần app-info | ❌ "No working app info" |
+| tag page SSR (`/tag/x`) | `__DEFAULT_SCOPE__` rỗng | ❌ không có data |
+| profile `itemList` SSR | rỗng (client-side fetch) | ❌ |
+
+**Kết luận:** mọi bề mặt đọc public còn lại đều đi qua 2 plane —
+(1) SSR hydration blob trên trang post/profile (đã solve JS challenge
+bằng curl_cffi trong `post_page.py`), (2) yt-dlp extractor. Phần
+discovery đồ thị (search/tag/trending/discover/comments) cần signed API
+→ bắt buộc login/cookie residential → ngoài phạm vi no-login, giữ
+suspended.
