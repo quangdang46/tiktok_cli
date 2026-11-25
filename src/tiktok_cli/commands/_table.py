@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import io
 import json
+import time
 from typing import Any, NoReturn
 
 import typer
@@ -134,6 +135,10 @@ def render_info(record: dict) -> str:
     tags = ", ".join(f"#{t}" for t in challenges) if isinstance(challenges, list) else ""
     duration = _dig(record, "duration")
     created = _dig(record, "create_time", "upload_date", "timestamp")
+    if isinstance(created, (int, float)) and not isinstance(created, bool):
+        created = time.strftime("%Y-%m-%d", time.gmtime(created))
+    elif isinstance(created, str) and created.isdigit() and len(created) == 8:
+        created = f"{created[:4]}-{created[4:6]}-{created[6:]}"
     pairs = [
         ("Title", _dig(record, "desc", "title") or ""),
         ("Author", _author(record)),
@@ -142,7 +147,10 @@ def render_info(record: dict) -> str:
         ("Likes", _fmt_count(_dig(record, "digg_count", "like_count", "likes"))),
         ("Comments", _fmt_count(_dig(record, "comment_count", "comments"))),
         ("Shares", _fmt_count(_dig(record, "share_count", "shares"))),
-        ("Favorites", _fmt_count(_dig(record, "collect_count", "favorites"))),
+        (
+            "Favorites",
+            _fmt_count(_dig(record, "collect_count", "favorite_count", "save_count", "favorites")),
+        ),
         ("Music", music),
         (
             "Duration",

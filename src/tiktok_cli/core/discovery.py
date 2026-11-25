@@ -1,21 +1,17 @@
-"""Wrapper around the external `tt` binary (github.com/tamnd/tiktok-cli).
+"""Discovery reads: video info and user posts — no login required.
 
-`tt` is a Go binary that reimplements TikTok's web signing and SSR parsing.
-We never reimplement that in Python — every discovery read shells out to `tt`
-and parses its JSONL record stream. All tt CLI knowledge lives in this module;
-commands consume plain dicts/lists.
+Two planes, tried in order of richness:
 
-Verified against tt's source (any-cli kit v0.3.3 + tiktok/ops.go,
-tiktok/discover_op.go):
+- **SSR page blob** (``core.post_page``): post pages embed
+  ``webapp.video-detail.itemInfo.itemStruct`` with statsV2, music and
+  challenges — fields yt-dlp does not expose. Reached via curl_cffi past
+  TikTok's JS challenge.
+- **yt-dlp** (``core.downloader.YtdlpClient``): canonical resolution for
+  shortlinks, bare ids, flat profile playlists, and cookie passthrough.
 
-- Output format flag is ``--output jsonl`` (global, ``-o`` short) — there is
-  no ``--format`` flag.
-- Record limit is the global ``-n`` / ``--limit`` flag.
-- discover seeds: ``--seed`` (user, repeatable), ``--seed-tag``,
-  ``--seed-sound``, ``--seed-video``, ``--seed-search``, ``--trending``;
-  ``--depth``, ``--max-nodes``, ``--top``. (Bead spec said
-  ``--seed-hashtag``/``--seed-user`` — the real flags are ``--seed-tag`` and
-  ``--seed``.)
+The ``tt``-binary wrappers below (search/tag/trending/discover) remain
+for the suspended commands only: TikTok's signed API plane is WAF-blocked
+for most IPs, so those reads are unreliable in practice.
 """
 
 from __future__ import annotations
@@ -24,8 +20,12 @@ import json
 import re
 import shutil
 import subprocess
+from typing import Any
 
+from tiktok_cli.core import post_page
+from tiktok_cli.core.downloader import YtdlpClient
 from tiktok_cli.core.errors import UserError
+from tiktok_cli.core.url import classify_url, photo_to_video_url
 
 TT_INSTALL_HINT = "install: go install github.com/tamnd/tiktok-cli/cmd/tt@latest"
 
@@ -35,6 +35,8 @@ _WAF_MARKERS = ("walled", "challenge", "403")
 
 _HANDLE_URL_RE = re.compile(r"tiktok\.com/@([A-Za-z0-9_.]+)", re.IGNORECASE)
 _TAG_URL_RE = re.compile(r"tiktok\.com/tag/([^/?#]+)", re.IGNORECASE)
+_HANDLE_RE = re.compile(r"^[A-Za-z0-9_.]+$")
+_BARE_ID_RE = re.compile(r"^\d{10,25}$")
 
 _DISCOVER_FLAGS = {
     "video": "--seed-video",
@@ -144,10 +146,110 @@ def _normalize_tag(tag: str) -> str:
     return tag.lstrip("#")
 
 
-def video_info(url: str) -> dict:
-    """One video record for a URL or bare id (`tt video`)."""
-    records = run_tt(["video", url])
-    return records[0]
+def _to_int(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str) and value.isdigit():
+        return int(value)
+    return None
+
+
+def _record_from_item_struct(item: dict[str, Any]) -> dict[str, Any]:
+    """Normalize ``webapp.video-detail.itemInfo.itemStruct`` for the table renderers."""
+    stats = item.get("statsV2") or item.get("stats") or {}
+    author = item.get("author") or {}
+    music = item.get("music") or {}
+    video = item.get("video") or {}
+    challenges = [
+        c.get("title")
+        for c in item.get("challenges") or []
+        if isinstance(c, dict) and c.get("title")
+    ]
+    unique_id = author.get("uniqueId") or ""
+    post_id = str(item.get("id") or "")
+    return {
+        "id": post_id,
+        "desc": item.get("desc") or "",
+        "title": item.get("desc") or "",
+        "author": unique_id,
+        "author_id": str(author.get("id") or ""),
+        "play_count": _to_int(stats.get("playCount") or stats.get("play_count")),
+        "digg_count": _to_int(stats.get("diggCount") or stats.get("digg_count")),
+        "comment_count": _to_int(stats.get("commentCount") or stats.get("comment_count")),
+        "share_count": _to_int(stats.get("shareCount") or stats.get("share_count")),
+        "repost_count": _to_int(stats.get("repostCount") or stats.get("repost_count")),
+        "favorite_count": _to_int(stats.get("collectCount") or stats.get("collect_count")),
+        "create_time": _to_int(item.get("createTime") or item.get("create_time")),
+        "duration": _to_int(video.get("duration") or item.get("duration")),
+        "music_title": music.get("title") or "",
+        "music_author": music.get("author") or "",
+        "challenges": challenges,
+        "url": (
+            f"https://www.tiktok.com/@{unique_id}/video/{post_id}" if unique_id and post_id else ""
+        ),
+        "source": "tiktok-page",
+    }
+
+
+def _record_from_ytdlp(info: dict[str, Any]) -> dict[str, Any]:
+    """Normalize a yt-dlp info/entry dict for the table renderers."""
+    artists = info.get("artists")
+    music_author = artists[0] if isinstance(artists, list) and artists else info.get("artist")
+    post_id = str(info.get("id") or info.get("display_id") or "")
+    uploader = info.get("uploader") or ""
+    url = info.get("webpage_url") or info.get("url") or ""
+    if not url and uploader and post_id:
+        url = f"https://www.tiktok.com/@{uploader}/video/{post_id}"
+    return {
+        "id": post_id,
+        "desc": info.get("description") or info.get("title") or "",
+        "title": info.get("title") or "",
+        "author": uploader,
+        "author_id": str(info.get("uploader_id") or info.get("channel_id") or ""),
+        "play_count": _to_int(info.get("view_count")),
+        "digg_count": _to_int(info.get("like_count")),
+        "comment_count": _to_int(info.get("comment_count")),
+        "share_count": _to_int(info.get("repost_count")),
+        "repost_count": _to_int(info.get("repost_count")),
+        "favorite_count": _to_int(info.get("save_count") or info.get("favorite_count")),
+        "create_time": _to_int(info.get("timestamp")),
+        "duration": _to_int(info.get("duration")),
+        "music_title": info.get("track") or "",
+        "music_author": music_author or "",
+        "challenges": info.get("tags") or [],
+        "url": url,
+        "source": "yt-dlp",
+    }
+
+
+def video_info(url: str, client: YtdlpClient | None = None) -> dict:
+    """One video record for a URL or bare id.
+
+    Post URLs (and bare numeric ids, resolved via ``/@_/video/``) go
+    through the SSR page blob first — richer record, and it keeps working
+    when yt-dlp's extractor breaks. yt-dlp is the fallback for everything
+    else (shortlinks, odd paths, cookie-assisted reads).
+    """
+    client = client or YtdlpClient()
+    # Bare numeric ids resolve through the @_/ placeholder author path.
+    if _BARE_ID_RE.match(url.strip()):
+        url = f"https://www.tiktok.com/@_/video/{url.strip()}"
+    if classify_url(url) in ("video", "photo", "short"):
+        item = post_page.fetch_item_struct(photo_to_video_url(url))
+        if item:
+            return _record_from_item_struct(item)
+    info = client.extract_info(url)
+    record = _record_from_ytdlp(info)
+    if not record["id"] and not record["desc"]:
+        raise UserError(
+            "yt-dlp returned no video metadata",
+            hint="check the URL is a public TikTok post",
+        )
+    return record
 
 
 def search(keyword: str, limit: int = 20) -> list[dict]:
@@ -155,9 +257,19 @@ def search(keyword: str, limit: int = 20) -> list[dict]:
     return run_tt(["search", keyword, "-n", str(limit)])
 
 
-def user_posts(handle: str, limit: int = 30) -> list[dict]:
-    """A user's public videos (`tt posts`)."""
-    return run_tt(["posts", _normalize_handle(handle), "-n", str(limit)])
+def user_posts(handle: str, limit: int = 30, client: YtdlpClient | None = None) -> list[dict]:
+    """A user's public videos via yt-dlp's flat profile playlist."""
+    handle = _normalize_handle(handle)
+    if not _HANDLE_RE.match(handle):
+        raise UserError(
+            f"invalid TikTok handle {handle!r}",
+            hint="use a @handle, bare handle, or tiktok.com/@handle URL",
+        )
+    client = client or YtdlpClient()
+    url = f"https://www.tiktok.com/@{handle}"
+    data = client.extract_flat(url, limit=limit)
+    entries = data.get("entries") or []
+    return [_record_from_ytdlp(e) for e in entries if isinstance(e, dict)]
 
 
 def hashtag_videos(tag: str, limit: int = 30) -> list[dict]:
