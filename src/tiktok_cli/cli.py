@@ -13,7 +13,7 @@ coverage — re-enable by restoring the imports and registrations below.
 
 import typer
 
-from tiktok_cli.commands import batch, doctor, transcript
+from tiktok_cli.commands import batch, doctor, transcript, user
 
 app = typer.Typer(
     name="tiktok",
@@ -31,3 +31,4 @@ def main() -> None:
 app.command(name="transcript")(transcript.transcript)
 app.command(name="batch")(batch.batch)
 app.command(name="doctor")(doctor.doctor)
+app.command(name="user")(user.user)

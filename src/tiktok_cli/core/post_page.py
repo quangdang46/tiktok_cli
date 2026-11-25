@@ -106,6 +106,64 @@ def _item_struct_from_html(html: str) -> dict[str, Any] | None:
     return (detail.get("itemInfo") or {}).get("itemStruct")
 
 
+def _user_info_from_html(html: str) -> dict[str, Any] | None:
+    scope = _default_scope(html)
+    detail = scope.get("webapp.user-detail")
+    if not detail:
+        return None
+    return (detail.get("userInfo") or {}).get("user")
+
+
+def _new_session() -> Any:
+    from curl_cffi import requests  # lazy: keeps module import cheap
+
+    session = requests.Session(impersonate="chrome")
+    session.headers.update({"Accept-Language": "en-US,en;q=0.9"})
+    return session
+
+
+def _get_html(session: Any, url: str) -> str:
+    return session.get(url, headers={"User-Agent": _UA}, timeout=30).text
+
+
+def _fetch_html(url: str, ready: Any) -> str | None:
+    """GET ``url``; when ``ready(html)`` is False solve the JS challenge once and retry.
+
+    ``ready`` is a predicate over the response HTML — it decides whether the
+    page carries the data we came for (e.g. an itemStruct or a user record).
+    Returns the satisfying HTML, or None when the data never shows up
+    (private post, hard WAF, ...).
+    """
+    session = _new_session()
+
+    try:
+        html = _get_html(session, url)
+    except Exception:  # noqa: BLE001 - any fetch failure means "no data"
+        return None
+
+    if ready(html):
+        return html
+
+    if _solve_challenge(html, session):
+        try:
+            html = _get_html(session, url)
+        except Exception:  # noqa: BLE001 - any fetch failure means "no data"
+            return None
+        return html if ready(html) else None
+    return None
+
+
+def fetch_default_scope(url: str) -> dict[str, Any]:
+    """Fetch a TikTok page and return its ``__DEFAULT_SCOPE__`` blob.
+
+    Works for any SSR-hydrated page — post pages (``webapp.video-detail``)
+    and profile pages (``webapp.user-detail``) alike. Returns {} when the
+    blob never materializes.
+    """
+    html = _fetch_html(url, lambda h: bool(_default_scope(h)))
+    return _default_scope(html) if html else {}
+
+
 def fetch_item_struct(url: str) -> dict[str, Any] | None:
     """Fetch a TikTok post page and return ``itemInfo.itemStruct``.
 
@@ -113,27 +171,18 @@ def fetch_item_struct(url: str) -> dict[str, Any] | None:
     challenge once when the first response lacks ``webapp.video-detail``.
     Returns None when the data is unavailable (private post, hard WAF, ...).
     """
-    from curl_cffi import requests  # lazy: keeps module import cheap
+    html = _fetch_html(url, lambda h: _item_struct_from_html(h) is not None)
+    return _item_struct_from_html(html) if html else None
 
-    session = requests.Session(impersonate="chrome")
-    session.headers.update({"Accept-Language": "en-US,en;q=0.9"})
 
-    try:
-        html = session.get(url, headers={"User-Agent": _UA}, timeout=30).text
-    except Exception:  # noqa: BLE001 - any fetch failure means "no data"
-        return None
+def fetch_user_info(url: str) -> dict[str, Any] | None:
+    """Fetch a TikTok profile page and return ``userInfo.user``.
 
-    item = _item_struct_from_html(html)
-    if item is not None:
-        return item
-
-    if _solve_challenge(html, session):
-        try:
-            html = session.get(url, headers={"User-Agent": _UA}, timeout=30).text
-        except Exception:  # noqa: BLE001 - any fetch failure means "no data"
-            return None
-        return _item_struct_from_html(html)
-    return None
+    ``url`` is a ``/@handle`` profile URL. Returns the ``user`` record only —
+    callers wanting ``stats`` should use ``fetch_default_scope`` instead.
+    """
+    html = _fetch_html(url, lambda h: _user_info_from_html(h) is not None)
+    return _user_info_from_html(html) if html else None
 
 
 def post_image_urls(item_struct: dict[str, Any]) -> list[dict[str, Any]]:
