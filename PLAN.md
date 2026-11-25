@@ -395,13 +395,18 @@ Kết quả probe thực tế trên máy dev — ma trận tính năng TikTok **
 | oEmbed `tiktok.com/oembed` | public, không cần login | khả dụng (chưa cần) |
 | `tt video <id>` | SSR plane của tt | ⚠️ chập chờn WAF |
 | `tt search/user/posts/hashtag/sound/trending/comments` | signed API plane | ❌ WAF challenge |
+| `/api/challenge/detail` (hashtag meta) | unsigned, chỉ cần WAF cookies | ✅ `tag_info` |
+| `/api/*` còn lại (item/user/comment/search) | trả body rỗng nếu thiếu `X-Gnarly` | ❌ cần chữ ký JS |
 | yt-dlp `TikTokTagIE`/`TikTokSoundIE` | cần app-info | ❌ "No working app info" |
 | tag page SSR (`/tag/x`) | `__DEFAULT_SCOPE__` rỗng | ❌ không có data |
 | profile `itemList` SSR | rỗng (client-side fetch) | ❌ |
 
 **Kết luận:** mọi bề mặt đọc public còn lại đều đi qua 2 plane —
 (1) SSR hydration blob trên trang post/profile (đã solve JS challenge
-bằng curl_cffi trong `post_page.py`), (2) yt-dlp extractor. Phần
-discovery đồ thị (search/tag/trending/discover/comments) cần signed API
-→ bắt buộc login/cookie residential → ngoài phạm vi no-login, giữ
-suspended.
+bằng curl_cffi trong `post_page.py`), (2) yt-dlp extractor. Riêng
+`/api/challenge/detail` trả lời unsigned sau khi session có WAF
+cookies → `tiktok tag` lấy được hashtag metadata (không list được
+video). Phần discovery đồ thị (search/trending/discover/comments,
+list video theo tag) cần signed API (`X-Gnarly` do JS web tính) →
+bắt buộc login/cookie residential hoặc headless browser → ngoài phạm
+vi no-login, giữ suspended.

@@ -153,6 +153,29 @@ def _fetch_html(url: str, ready: Any) -> str | None:
     return None
 
 
+def api_session(page_url: str = "https://www.tiktok.com/") -> Any | None:
+    """Session warmed past TikTok's WAF challenge, for ``/api/*`` JSON calls.
+
+    Fetches ``page_url`` once; when it serves the JS challenge, solves the
+    proof-of-work and refetches so the ``_wafchallengeid``/``msToken``
+    cookies are set. Returns None only when the landing fetch itself fails —
+    unsigned API endpoints (e.g. ``challenge/detail``) answer once the
+    session carries those cookies.
+    """
+    session = _new_session()
+    session.headers.update({"User-Agent": _UA, "Accept": "application/json"})
+    try:
+        html = _get_html(session, page_url)
+        if _solve_challenge(html, session):
+            try:
+                _get_html(session, page_url)
+            except Exception:  # noqa: BLE001, S110 - best-effort; cookies already set by the solve
+                pass
+    except Exception:  # noqa: BLE001 - any fetch failure means no session
+        return None
+    return session
+
+
 def fetch_default_scope(url: str) -> dict[str, Any]:
     """Fetch a TikTok page and return its ``__DEFAULT_SCOPE__`` blob.
 

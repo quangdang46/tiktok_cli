@@ -9,9 +9,14 @@ Two planes, tried in order of richness:
 - **yt-dlp** (``core.downloader.YtdlpClient``): canonical resolution for
   shortlinks, bare ids, flat profile playlists, and cookie passthrough.
 
-The ``tt``-binary wrappers below (search/tag/trending/discover) remain
+The ``tt``-binary wrappers below (search/trending/discover) remain
 for the suspended commands only: TikTok's signed API plane is WAF-blocked
 for most IPs, so those reads are unreliable in practice.
+
+One ``/api/*`` endpoint answers without request signing once the session
+carries WAF cookies — ``challenge/detail`` — which powers ``tag_info``.
+Everything else on the API plane (item lists, search, user detail,
+comments) silently returns an empty body without an ``X-Gnarly`` signature.
 """
 
 from __future__ import annotations
@@ -21,6 +26,7 @@ import re
 import shutil
 import subprocess
 from typing import Any
+from urllib.parse import quote
 
 from tiktok_cli.core import post_page
 from tiktok_cli.core.downloader import YtdlpClient
@@ -36,7 +42,14 @@ _WAF_MARKERS = ("walled", "challenge", "403")
 _HANDLE_URL_RE = re.compile(r"tiktok\.com/@([A-Za-z0-9_.]+)", re.IGNORECASE)
 _TAG_URL_RE = re.compile(r"tiktok\.com/tag/([^/?#]+)", re.IGNORECASE)
 _HANDLE_RE = re.compile(r"^[A-Za-z0-9_.]+$")
+_TAG_NAME_RE = re.compile(r"^[A-Za-z0-9_]+$")
 _BARE_ID_RE = re.compile(r"^\d{10,25}$")
+
+_API_ORIGIN = "https://www.tiktok.com"
+_API_PARAMS = (
+    "aid=1988&app_name=tiktok_web&device_platform=web_pc"
+    "&channel=tiktok_web&region=VN&language=en"
+)
 
 _DISCOVER_FLAGS = {
     "video": "--seed-video",
@@ -270,6 +283,71 @@ def user_posts(handle: str, limit: int = 30, client: YtdlpClient | None = None) 
     data = client.extract_flat(url, limit=limit)
     entries = data.get("entries") or []
     return [_record_from_ytdlp(e) for e in entries if isinstance(e, dict)]
+
+
+def _api_get_json(session: Any, path: str) -> dict:
+    """GET ``path`` on www.tiktok.com/api and return the JSON body."""
+    resp = session.get(
+        f"{_API_ORIGIN}{path}",
+        headers={"Referer": "https://www.tiktok.com/"},
+        timeout=30,
+    )
+    try:
+        data = resp.json()
+    except ValueError as exc:
+        raise UserError("TikTok API returned a non-JSON response") from exc
+    if not isinstance(data, dict):
+        raise UserError("TikTok API returned an unexpected response")
+    return data
+
+
+def tag_info(tag: str, session: Any | None = None) -> dict:
+    """Hashtag metadata via ``/api/challenge/detail`` — unsigned, WAF-cookie only.
+
+    Returns id/tag/title/desc plus video and view counts. Video *lists* under
+    a hashtag still need the signed API plane (or login) — this is metadata only.
+    """
+    name = _normalize_tag(tag)
+    if not _TAG_NAME_RE.match(name):
+        raise UserError(
+            f"invalid TikTok hashtag {tag!r}",
+            hint="use a #tag, bare tag, or tiktok.com/tag/tag URL",
+        )
+    session = session or post_page.api_session()
+    if session is None:
+        raise UserError(
+            "could not establish a TikTok session",
+            hint="check network connectivity and retry",
+        )
+    data = _api_get_json(
+        session, f"/api/challenge/detail/?challengeName={quote(name)}&{_API_PARAMS}"
+    )
+    info = data.get("challengeInfo") or {}
+    challenge = info.get("challenge") or {}
+    if not challenge.get("id"):
+        raise UserError(
+            f"hashtag #{name} not found",
+            hint="check the tag name — it may not exist or may be region-locked",
+        )
+    # statsV2 carries real counts; the legacy stats objects can report 0.
+    stats = info.get("statsV2") or info.get("stats") or challenge.get("stats") or {}
+    share_meta = data.get("shareMeta") or {}
+    announcement = info.get("challengeAnnouncement") or {}
+    return {
+        "id": str(challenge.get("id") or ""),
+        "tag": name,
+        "title": challenge.get("title") or name,
+        "desc": (
+            share_meta.get("desc")
+            or announcement.get("body")
+            or challenge.get("desc")
+            or ""
+        ),
+        "video_count": _to_int(stats.get("videoCount")),
+        "view_count": _to_int(stats.get("viewCount")),
+        "url": f"https://www.tiktok.com/tag/{name}",
+        "source": "tiktok-api",
+    }
 
 
 def hashtag_videos(tag: str, limit: int = 30) -> list[dict]:

@@ -200,29 +200,49 @@ class TestList:
         assert json.loads(result.output) == [VIDEO]
 
 
-class TestTag:
-    @patch("tiktok_cli.core.discovery.hashtag_videos")
-    def test_table_and_limit(self, mock_tag):
-        mock_tag.return_value = [VIDEO]
-        result = runner.invoke(DISCOVERY_APP, ["tag", "#fyp", "-n", "9"])
-        assert result.exit_code == 0, result.output
-        assert "hello world" in result.output
-        mock_tag.assert_called_once_with("#fyp", limit=9)
+TAG_RECORD = {
+    "id": "229207",
+    "tag": "fyp",
+    "title": "fyp",
+    "desc": "Watch awesome short videos created with trending hashtag #fyp",
+    "video_count": 9561310565,
+    "view_count": 132542161477281,
+    "url": "https://www.tiktok.com/tag/fyp",
+    "source": "tiktok-api",
+}
 
-    @patch("tiktok_cli.core.discovery.hashtag_videos")
-    def test_tag_url_passthrough_and_default_limit(self, mock_tag):
-        mock_tag.return_value = [VIDEO]
+
+class TestTag:
+    @patch("tiktok_cli.commands.tag.tag_info")
+    def test_table_output(self, mock_info):
+        mock_info.return_value = TAG_RECORD
+        result = runner.invoke(DISCOVERY_APP, ["tag", "#fyp"])
+        assert result.exit_code == 0, result.output
+        assert "#fyp" in result.output
+        assert "9,561,310,565" in result.output
+        mock_info.assert_called_once_with("#fyp")
+
+    @patch("tiktok_cli.commands.tag.tag_info")
+    def test_tag_url_passthrough(self, mock_info):
+        mock_info.return_value = TAG_RECORD
         url = "https://www.tiktok.com/tag/fyp"
         result = runner.invoke(DISCOVERY_APP, ["tag", url])
         assert result.exit_code == 0
-        mock_tag.assert_called_once_with(url, limit=30)
+        mock_info.assert_called_once_with(url)
 
-    @patch("tiktok_cli.core.discovery.hashtag_videos")
-    def test_json(self, mock_tag):
-        mock_tag.return_value = [VIDEO]
+    @patch("tiktok_cli.commands.tag.tag_info")
+    def test_json(self, mock_info):
+        mock_info.return_value = TAG_RECORD
         result = runner.invoke(DISCOVERY_APP, ["tag", "fyp", "--json"])
         assert result.exit_code == 0
-        assert json.loads(result.output) == [VIDEO]
+        assert json.loads(result.output) == TAG_RECORD
+
+    @patch("tiktok_cli.commands.tag.tag_info")
+    def test_user_error(self, mock_info):
+        mock_info.side_effect = UserError("hashtag #nope not found")
+        result = runner.invoke(DISCOVERY_APP, ["tag", "nope"])
+        assert result.exit_code == 1
+        assert "not found" in result.output + _stderr(result)
 
 
 class TestTrending:

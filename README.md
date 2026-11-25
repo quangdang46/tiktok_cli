@@ -121,8 +121,9 @@ read `imagePost` data that yt-dlp can't see.
 | Agent contract (stdout/stderr) | ✅ | ❌ | ⚠️ | ❌ |
 | No login required | ✅ | ✅ | ✅ | ✅ |
 | Video info / user posts / profile | ✅ `info` `list` `user` | ⚠️ assemble it | ❌ | ⚠️ WAF-blocked |
+| Hashtag metadata | ✅ `tag` | ⚠️ assemble it | ❌ | ⚠️ WAF-blocked |
 | Download video/photo posts | ✅ `download` | ✅ | ❌ | ✅ media only |
-| Discovery (search/trending/tag) | ⛔ WAF-blocked | ❌ | ❌ | ⚠️ WAF-blocked |
+| Discovery (search/trending/videos under tag) | ⛔ signed API | ❌ | ❌ | ⚠️ WAF-blocked |
 
 ---
 
@@ -173,11 +174,13 @@ tiktok download <url> -o ./videos
 | `tiktok list <handle>` | A user's public videos (flat playlist, no per-video fetch). | `-n/--limit`, `--json`, `--cookies-from-browser`, `--cookies` |
 | `tiktok user <handle>` | Public profile stats — followers/following/hearts/videos, bio, verified/private. | `--json` |
 | `tiktok download <urls...>` | Save videos as mp4 (`<author>-<id>.<ext>`) and photo posts as images + `images.json`. Skips existing unless `--refresh`. | `-o/--output-dir`, `--refresh`, `--cookies-from-browser`, `--cookies` |
+| `tiktok tag <tag>` | Hashtag metadata — video/view counts, description. Metadata only; listing videos under a tag needs login. | `--json` |
 | `tiktok doctor` | Checks yt-dlp, ffmpeg, faster-whisper, mlx-whisper, cached models, `tt`, network, output dir. Exit 1 on missing core deps. | — |
 
-> `search`, `tag`, `trending`, `discover` stay **suspended** — they need
-> TikTok's signed API plane, which is WAF-blocked for most IPs. See
-> Limitations.
+> `search`, `trending`, `discover` stay **suspended** — they need
+> TikTok's signed API plane, which is WAF-blocked for most IPs. `tag`
+> works because `/api/challenge/detail` answers unsigned once the
+> session carries WAF cookies. See Limitations.
 
 `tiktok transcript` and `batch` share the same options:
 
@@ -313,11 +316,15 @@ the audio transcript still succeeds and a warning goes to stderr.
   TikTok extractor; when TikTok breaks it, upgrade yt-dlp
   (`uv tool install --force ...`) and re-run `tiktok doctor` to check
   the version.
-- **Graph discovery is unavailable without login.** `search`, `tag`,
-  `trending`, `discover` depend on TikTok's signed API plane
-  (`/api/search/...`, recommend feed), which serves a WAF challenge to
-  most datacenter/residential IPs — verified 2026-11. What *does* work
-  anonymously: post pages and profile pages (SSR hydration blob, which
+- **Graph discovery is unavailable without login.** `search`,
+  `trending`, `discover`, and video lists under a hashtag depend on
+  TikTok's signed API plane (`/api/search/...`, item lists), which
+  answers anonymous requests with an empty body unless the request
+  carries an `X-Gnarly` signature computed by TikTok's web JS —
+  verified 2026-11. `tag` still works: `/api/challenge/detail` is the
+  one endpoint that answers unsigned once the session holds WAF
+  cookies. What *does* work anonymously: post pages and profile pages
+  (SSR hydration blob, which
   `info`/`list`/`user`/`download`/`transcript` use) and yt-dlp's
   extractor. `tt`-backed code and tests remain in the repo.
 - **No captions + `--whisper never`** yields `no-captions`: metadata and
