@@ -236,6 +236,33 @@ class YtdlpClient:
         # Whatever yt-dlp wrote is the truth; return every .vtt, sorted.
         return sorted(out_dir.glob("*.vtt"))
 
+    def download_video(self, url: str, out_dir: Path, fmt: str = "best") -> tuple[Path, dict]:
+        """Download the video file into ``out_dir``; return (path, info).
+
+        ``fmt`` defaults to ``best`` — a single-file mp4 when TikTok serves
+        one, so no ffmpeg merge is needed. The filename is
+        ``<author>-<id>.<ext>``.
+        """
+        out_dir.mkdir(parents=True, exist_ok=True)
+        yt_dlp = _import_ytdlp()
+        opts = self._ydl_opts(
+            None,
+            format=fmt,
+            outtmpl=str(out_dir / "%(uploader,uploader_id|video)s-%(id)s.%(ext)s"),
+        )
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(url, download=True) or {}
+                path = _resolve_path(ydl, info)
+        except Exception as exc:
+            raise translate_download_error(exc) from exc
+        if path is None:
+            raise UserError(
+                f"yt-dlp produced no video file for {url}.",
+                hint="Check that the link has a video track and is reachable.",
+            )
+        return path, info
+
     def download_audio(self, url: str, tmp_dir: Path) -> Path:
         """Download the best audio stream into ``tmp_dir``; return its path."""
         tmp_dir.mkdir(parents=True, exist_ok=True)

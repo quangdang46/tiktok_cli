@@ -15,7 +15,7 @@ the imports and registrations below.
 
 import typer
 
-from tiktok_cli.commands import batch, doctor, info, list_cmd, transcript, user
+from tiktok_cli.commands import batch, doctor, download, info, list_cmd, transcript, user
 
 app = typer.Typer(
     name="tiktok",
@@ -36,3 +36,4 @@ app.command(name="doctor")(doctor.doctor)
 app.command(name="user")(user.user)
 app.command(name="info")(info.info)
 app.command(name="list")(list_cmd.list_videos)
+app.command(name="download")(download.download)
