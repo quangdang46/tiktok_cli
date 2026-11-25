@@ -159,6 +159,37 @@ def render_info(record: dict) -> str:
     return buf.getvalue().rstrip()
 
 
+def render_profile(record: dict) -> str:
+    """Compact key/value table for a user profile (`tiktok user`)."""
+    buf = io.StringIO()
+    console = Console(file=buf, width=100, highlight=False)
+    table = Table(box=None, pad_edge=False, show_header=False)
+    table.add_column(style="bold")
+    table.add_column(overflow="fold")
+    verified = "yes" if record.get("verified") else ""
+    private = "yes" if record.get("private") else ""
+    pairs = [
+        ("Handle", record.get("handle") or ""),
+        ("Nickname", record.get("nickname") or ""),
+        ("ID", record.get("id") or ""),
+        ("Bio", record.get("signature") or ""),
+        ("Verified", verified),
+        ("Private", private),
+        ("Followers", _fmt_count(record.get("follower_count"))),
+        ("Following", _fmt_count(record.get("following_count"))),
+        ("Hearts", _fmt_count(record.get("heart_count"))),
+        ("Videos", _fmt_count(record.get("video_count"))),
+        ("Friends", _fmt_count(record.get("friend_count"))),
+        ("Created", record.get("created") or ""),
+        ("URL", record.get("url") or ""),
+    ]
+    for label, value in pairs:
+        if value != "" and value is not None:
+            table.add_row(label, str(value))
+    console.print(table)
+    return buf.getvalue().rstrip()
+
+
 def emit_records(records: list[dict], *, as_json: bool) -> None:
     """Print records as a table, or raw JSON with --json."""
     if as_json:
