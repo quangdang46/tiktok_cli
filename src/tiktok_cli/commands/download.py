@@ -38,8 +38,12 @@ def _is_photo_post(url: str, info: dict[str, Any]) -> bool:
 
 
 def _download_photo_post(url: str, out_dir: Path) -> list[Path]:
-    """Download a slideshow's images + manifest; return saved media paths."""
-    item = post_page.fetch_item_struct(url)
+    """Download a slideshow's images + manifest; return saved media paths.
+
+    ``/photo/`` pages no longer SSR ``itemStruct`` for anonymous clients —
+    the same post id under ``/video/`` does, carrying ``imagePost``.
+    """
+    item = post_page.fetch_item_struct(photo_to_video_url(url))
     if not item:
         raise UserError(
             "could not load the post page",

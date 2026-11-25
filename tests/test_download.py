@@ -57,12 +57,14 @@ class TestDownloadOne:
         img.write_bytes(b"x")
         item = {"id": "456", "imagePost": {"images": []}}
         with (
-            patch.object(download_cmd.post_page, "fetch_item_struct", return_value=item),
+            patch.object(download_cmd.post_page, "fetch_item_struct", return_value=item) as fetch,
             patch.object(download_cmd.post_page, "download_post_images", return_value=[img]),
             patch.object(download_cmd.post_page, "write_images_manifest"),
         ):
             paths = download_cmd._download_one(PHOTO_URL, out_dir, _client_mock(), refresh=False)
         assert paths == [img]
+        # /photo/ pages don't SSR itemStruct — must fetch the /video/ twin
+        fetch.assert_called_once_with("https://www.tiktok.com/@u/video/456")
 
     def test_disguised_photo_post_detected_via_info(self, out_dir, tmp_path):
         """A /video/ URL whose info says playlist routes to the image path."""
