@@ -180,6 +180,26 @@ class YtdlpClient:
             raise translate_download_error(exc) from exc
         return info or {}
 
+    def extract_flat(self, url: str, limit: int | None = None) -> dict[str, Any]:
+        """Flat-playlist extraction: entry stubs only, no per-video fetch.
+
+        Used for profile pages (``/@handle``) where each entry already
+        carries id/title/uploader/view_count — enough for listings without
+        paying one extraction per video.
+        """
+        yt_dlp = _import_ytdlp()
+        opts = self._ydl_opts(
+            None,
+            extract_flat=True,
+            noplaylist=False,
+            playlistend=limit,
+        )
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                return ydl.extract_info(url, download=False) or {}
+        except Exception as exc:
+            raise translate_download_error(exc) from exc
+
     def download_subtitles(
         self, url: str, out_dir: Path, langs: str = "vi.*,en.*,vi,en,all"
     ) -> list[Path]:

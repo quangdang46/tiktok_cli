@@ -126,7 +126,7 @@ class TestInfo:
         result = runner.invoke(DISCOVERY_APP, ["info", "https://tiktok.com/@u/video/1"])
         assert result.exit_code == 0, result.output
         assert "dev.daily" in result.output
-        mock_info.assert_called_once_with("https://tiktok.com/@u/video/1")
+        mock_info.assert_called_once_with("https://tiktok.com/@u/video/1", client=None)
 
     @patch("tiktok_cli.core.discovery.video_info")
     def test_json_output(self, mock_info):
@@ -182,7 +182,7 @@ class TestList:
         result = runner.invoke(DISCOVERY_APP, ["list", "@dev.daily", "-n", "7"])
         assert result.exit_code == 0, result.output
         assert "hello world" in result.output
-        mock_posts.assert_called_once_with("@dev.daily", limit=7)
+        mock_posts.assert_called_once_with("@dev.daily", limit=7, client=None)
 
     @patch("tiktok_cli.core.discovery.user_posts")
     def test_default_limit_and_url_passthrough(self, mock_posts):
@@ -190,7 +190,7 @@ class TestList:
         url = "https://www.tiktok.com/@dev.daily"
         result = runner.invoke(DISCOVERY_APP, ["list", url])
         assert result.exit_code == 0
-        mock_posts.assert_called_once_with(url, limit=30)
+        mock_posts.assert_called_once_with(url, limit=30, client=None)
 
     @patch("tiktok_cli.core.discovery.user_posts")
     def test_json(self, mock_posts):

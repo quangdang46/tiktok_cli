@@ -86,18 +86,201 @@ class TestRunTt:
             discovery.run_tt(["video", "u"])
 
 
-class TestHelpers:
+class TestNormalizers:
+    """SSR itemStruct and yt-dlp info/entry -> flat record."""
+
+    def test_record_from_item_struct(self):
+        item = {
+            "id": "7106594312292453675",
+            "desc": "frog video",
+            "createTime": 1654632929,
+            "author": {"id": "107955", "uniqueId": "tiktok"},
+            "statsV2": {
+                "diggCount": "98900",
+                "shareCount": "362",
+                "commentCount": "1279",
+                "playCount": "597300",
+                "collectCount": "59224",
+                "repostCount": "0",
+            },
+            "music": {"title": "original sound", "author": "TikTok"},
+            "challenges": [{"title": "Minecraft"}, {"noTitle": True}, "junk"],
+            "video": {"duration": 24},
+        }
+        rec = discovery._record_from_item_struct(item)
+        assert rec["id"] == "7106594312292453675"
+        assert rec["desc"] == "frog video"
+        assert rec["author"] == "tiktok"
+        assert rec["play_count"] == 597300
+        assert rec["digg_count"] == 98900
+        assert rec["comment_count"] == 1279
+        assert rec["share_count"] == 362
+        assert rec["favorite_count"] == 59224
+        assert rec["create_time"] == 1654632929
+        assert rec["duration"] == 24
+        assert rec["music_title"] == "original sound"
+        assert rec["music_author"] == "TikTok"
+        assert rec["challenges"] == ["Minecraft"]
+        assert rec["url"] == "https://www.tiktok.com/@tiktok/video/7106594312292453675"
+        assert rec["source"] == "tiktok-page"
+
+    def test_record_from_ytdlp_full_info(self):
+        info = {
+            "id": "123",
+            "title": "a title",
+            "description": "a description",
+            "uploader": "dev.daily",
+            "uploader_id": "107955",
+            "view_count": 1000,
+            "like_count": 50,
+            "comment_count": 7,
+            "repost_count": 3,
+            "save_count": 9,
+            "timestamp": 1700000000,
+            "duration": 15,
+            "track": "original sound",
+            "artists": ["TikTok"],
+            "tags": ["fyp"],
+            "webpage_url": "https://www.tiktok.com/@dev.daily/video/123",
+        }
+        rec = discovery._record_from_ytdlp(info)
+        assert rec["id"] == "123"
+        assert rec["desc"] == "a description"
+        assert rec["author"] == "dev.daily"
+        assert rec["play_count"] == 1000
+        assert rec["digg_count"] == 50
+        assert rec["comment_count"] == 7
+        assert rec["share_count"] == 3
+        assert rec["favorite_count"] == 9
+        assert rec["music_title"] == "original sound"
+        assert rec["music_author"] == "TikTok"
+        assert rec["challenges"] == ["fyp"]
+        assert rec["url"] == "https://www.tiktok.com/@dev.daily/video/123"
+        assert rec["source"] == "yt-dlp"
+
+    def test_record_from_ytdlp_flat_entry_builds_url(self):
+        entry = {
+            "id": "555",
+            "title": "flat entry",
+            "uploader": "dev.daily",
+            "view_count": 10,
+            "url": None,
+            "webpage_url": None,
+        }
+        rec = discovery._record_from_ytdlp(entry)
+        assert rec["url"] == "https://www.tiktok.com/@dev.daily/video/555"
+        assert rec["desc"] == "flat entry"
+
+
+class TestVideoInfo:
+    _URL = "https://www.tiktok.com/@u/video/1"
+
+    def test_ssr_item_struct_wins(self):
+        item = {"id": "1", "desc": "d", "author": {"uniqueId": "u"}}
+        with (
+            patch.object(discovery.post_page, "fetch_item_struct", return_value=item),
+            patch.object(discovery.YtdlpClient, "extract_info") as ytdlp,
+        ):
+            rec = discovery.video_info(self._URL)
+        assert rec["source"] == "tiktok-page"
+        assert rec["id"] == "1"
+        ytdlp.assert_not_called()
+
+    def test_ytdlp_fallback_when_ssr_empty(self):
+        info = {"id": "1", "title": "t", "uploader": "u"}
+        with (
+            patch.object(discovery.post_page, "fetch_item_struct", return_value=None),
+            patch.object(discovery.YtdlpClient, "extract_info", return_value=info) as ytdlp,
+        ):
+            rec = discovery.video_info(self._URL)
+        assert rec["source"] == "yt-dlp"
+        assert rec["id"] == "1"
+        ytdlp.assert_called_once_with(self._URL)
+
+    def test_non_post_url_skips_ssr(self):
+        info = {"id": "1", "title": "t"}
+        with (
+            patch.object(discovery.post_page, "fetch_item_struct") as ssr,
+            patch.object(discovery.YtdlpClient, "extract_info", return_value=info),
+        ):
+            discovery.video_info("not a url at all")
+        ssr.assert_not_called()
+
+    def test_bare_id_resolves_via_placeholder_author(self):
+        item = {"id": "7106594312292453675", "desc": "d"}
+        with (
+            patch.object(discovery.post_page, "fetch_item_struct", return_value=item) as ssr,
+            patch.object(discovery.YtdlpClient, "extract_info") as ytdlp,
+        ):
+            rec = discovery.video_info("7106594312292453675")
+        ssr.assert_called_once_with("https://www.tiktok.com/@_/video/7106594312292453675")
+        assert rec["id"] == "7106594312292453675"
+        ytdlp.assert_not_called()
+
+    def test_photo_url_rewritten_for_ssr(self):
+        item = {"id": "9", "desc": "p"}
+        with (
+            patch.object(discovery.post_page, "fetch_item_struct", return_value=item) as ssr,
+            patch.object(discovery.YtdlpClient, "extract_info") as ytdlp,
+        ):
+            discovery.video_info("https://www.tiktok.com/@u/photo/9")
+        ssr.assert_called_once_with("https://www.tiktok.com/@u/video/9")
+        ytdlp.assert_not_called()
+
+    def test_empty_ytdlp_raises(self):
+        with (
+            patch.object(discovery.post_page, "fetch_item_struct", return_value=None),
+            patch.object(discovery.YtdlpClient, "extract_info", return_value={}),
+            pytest.raises(UserError, match="no video metadata"),
+        ):
+            discovery.video_info(self._URL)
+
+
+class TestUserPosts:
+    def test_flattens_entries(self):
+        entries = [
+            {"id": "1", "title": "a", "uploader": "u", "view_count": 5},
+            {"id": "2", "title": "b", "uploader": "u", "view_count": 6},
+            "junk",
+        ]
+        client = patch.object(
+            discovery.YtdlpClient,
+            "extract_flat",
+            return_value={"entries": entries},
+        )
+        with client as flat:
+            records = discovery.user_posts("@cool.user", limit=7)
+        flat.assert_called_once_with("https://www.tiktok.com/@cool.user", limit=7)
+        assert [r["id"] for r in records] == ["1", "2"]
+        assert records[0]["author"] == "u"
+        assert records[0]["play_count"] == 5
+
+    def test_normalizes_handle_forms(self):
+        for ref in ["@cool.user", "cool.user", "https://www.tiktok.com/@cool.user"]:
+            with patch.object(
+                discovery.YtdlpClient, "extract_flat", return_value={"entries": []}
+            ) as flat:
+                discovery.user_posts(ref)
+            assert flat.call_args.args[0] == "https://www.tiktok.com/@cool.user"
+
+    def test_invalid_handle_raises(self):
+        with (
+            patch.object(discovery.YtdlpClient, "extract_flat") as flat,
+            pytest.raises(UserError, match="invalid TikTok handle"),
+        ):
+            discovery.user_posts("not a handle!!")
+        flat.assert_not_called()
+
+
+class TestTtBackedHelpers:
+    """search/hashtag/trending/discover still shell out to `tt` (suspended cmds)."""
+
     def _run(self, records=None):
         return patch.object(
             discovery.subprocess,
             "run",
             return_value=_proc("".join(json.dumps(r) + "\n" for r in (records or [{}]))),
         )
-
-    def test_video_info(self):
-        with self._run([{"id": "1"}]) as run:
-            assert discovery.video_info("https://tiktok.com/@u/video/1") == {"id": "1"}
-        assert run.call_args.args[0][:2] == ["tt", "video"]
 
     def test_search_limit_flag(self):
         with self._run() as run:
@@ -113,12 +296,6 @@ class TestHelpers:
             "jsonl",
             "--quiet",
         ]
-
-    def test_user_posts_normalizes_handle(self):
-        for ref in ["@cool.user", "cool.user", "https://www.tiktok.com/@cool.user"]:
-            with self._run() as run:
-                discovery.user_posts(ref)
-            assert run.call_args.args[0][2] == "cool.user"
 
     def test_hashtag_strips_hash_and_url(self):
         with self._run() as run:
