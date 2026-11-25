@@ -198,6 +198,28 @@ def render_profile(record: dict) -> str:
     return buf.getvalue().rstrip()
 
 
+def render_tag(record: dict) -> str:
+    """Compact key/value table for a hashtag (`tiktok tag`)."""
+    buf = io.StringIO()
+    console = Console(file=buf, width=100, highlight=False)
+    table = Table(box=None, pad_edge=False, show_header=False)
+    table.add_column(style="bold")
+    table.add_column(overflow="fold")
+    pairs = [
+        ("Tag", f"#{record.get('tag') or record.get('title') or ''}"),
+        ("ID", record.get("id") or ""),
+        ("Videos", _fmt_count(record.get("video_count"))),
+        ("Views", _fmt_count(record.get("view_count"))),
+        ("Desc", record.get("desc") or ""),
+        ("URL", record.get("url") or ""),
+    ]
+    for label, value in pairs:
+        if value != "" and value is not None:
+            table.add_row(label, str(value))
+    console.print(table)
+    return buf.getvalue().rstrip()
+
+
 def emit_records(records: list[dict], *, as_json: bool) -> None:
     """Print records as a table, or raw JSON with --json."""
     if as_json:

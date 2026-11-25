@@ -364,3 +364,92 @@ class TestDiscover:
     def test_empty_value_raises(self):
         with pytest.raises(UserError, match="needs a value"):
             self._argv([("video", "  ")])
+
+
+class _FakeResp:
+    def __init__(self, data):
+        self._data = data
+
+    def json(self):
+        return self._data
+
+
+class _FakeSession:
+    def __init__(self, data):
+        self._data = data
+        self.requests = []
+
+    def get(self, url, **kwargs):
+        self.requests.append(url)
+        return _FakeResp(self._data)
+
+
+CHALLENGE_DETAIL = {
+    "challengeInfo": {
+        "challenge": {
+            "id": "229207",
+            "title": "fyp",
+            "desc": "",
+            "stats": {"videoCount": 0, "viewCount": 132542200000000},
+        },
+        "challengeAnnouncement": {"body": "", "title": ""},
+        "stats": {"videoCount": 0, "viewCount": 132542200000000},
+        "statsV2": {"videoCount": "9561310565", "viewCount": "132542161477281"},
+    },
+    "shareMeta": {
+        "desc": "Watch awesome short videos created with trending hashtag #fyp",
+        "title": "#fyp on TikTok",
+    },
+    "status_code": 0,
+}
+
+
+class TestTagInfo:
+    def test_normalizes_challenge_detail(self):
+        session = _FakeSession(CHALLENGE_DETAIL)
+        with patch.object(discovery.post_page, "api_session", return_value=session) as api:
+            rec = discovery.tag_info("#fyp")
+        api.assert_called_once_with()
+        assert "challengeName=fyp" in session.requests[0]
+        assert rec["id"] == "229207"
+        assert rec["tag"] == "fyp"
+        assert rec["title"] == "fyp"
+        assert "trending hashtag #fyp" in rec["desc"]
+        # statsV2 wins over the legacy stats objects that report 0
+        assert rec["video_count"] == 9561310565
+        assert rec["view_count"] == 132542161477281
+        assert rec["url"] == "https://www.tiktok.com/tag/fyp"
+
+    def test_tag_url_and_session_injection(self):
+        session = _FakeSession(CHALLENGE_DETAIL)
+        rec = discovery.tag_info("https://www.tiktok.com/tag/fyp", session=session)
+        assert "challengeName=fyp" in session.requests[0]
+        assert rec["tag"] == "fyp"
+
+    def test_stats_fallback_when_stats_v2_missing(self):
+        data = {
+            "challengeInfo": {
+                "challenge": {"id": "1", "title": "x"},
+                "stats": {"videoCount": 7, "viewCount": 70},
+            }
+        }
+        rec = discovery.tag_info("x", session=_FakeSession(data))
+        assert rec["video_count"] == 7
+        assert rec["view_count"] == 70
+        assert rec["desc"] == ""
+
+    def test_unknown_tag_raises(self):
+        data = {"challengeInfo": {"challenge": {}}, "status_code": 0}
+        with pytest.raises(UserError, match="not found"):
+            discovery.tag_info("nope", session=_FakeSession(data))
+
+    def test_invalid_tag_raises(self):
+        with pytest.raises(UserError, match="invalid TikTok hashtag"):
+            discovery.tag_info("bad tag!!")
+
+    def test_no_session_raises(self):
+        with (
+            patch.object(discovery.post_page, "api_session", return_value=None),
+            pytest.raises(UserError, match="could not establish"),
+        ):
+            discovery.tag_info("fyp")
