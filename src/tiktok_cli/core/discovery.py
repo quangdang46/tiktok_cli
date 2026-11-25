@@ -47,8 +47,7 @@ _BARE_ID_RE = re.compile(r"^\d{10,25}$")
 
 _API_ORIGIN = "https://www.tiktok.com"
 _API_PARAMS = (
-    "aid=1988&app_name=tiktok_web&device_platform=web_pc"
-    "&channel=tiktok_web&region=VN&language=en"
+    "aid=1988&app_name=tiktok_web&device_platform=web_pc&channel=tiktok_web&region=VN&language=en"
 )
 
 _DISCOVER_FLAGS = {
@@ -337,12 +336,7 @@ def tag_info(tag: str, session: Any | None = None) -> dict:
         "id": str(challenge.get("id") or ""),
         "tag": name,
         "title": challenge.get("title") or name,
-        "desc": (
-            share_meta.get("desc")
-            or announcement.get("body")
-            or challenge.get("desc")
-            or ""
-        ),
+        "desc": (share_meta.get("desc") or announcement.get("body") or challenge.get("desc") or ""),
         "video_count": _to_int(stats.get("videoCount")),
         "view_count": _to_int(stats.get("viewCount")),
         "url": f"https://www.tiktok.com/tag/{name}",
